@@ -1,0 +1,27 @@
+{
+   "config": {
+        "width": 1024,
+        "height": 768
+   },
+  "camera": {
+    "position": [0, 0, -5],
+    "look_at": [0, 0, 0],
+    "fov": 60
+  },
+  "objects": [
+    {
+        "type": "sphere",
+        "center": [10, 10, 10],
+        "radius": 10
+    },
+    {
+        "type": "sphere",
+        "center": [0, 0, 0],
+        "radius": 5
+    },
+    {
+        "type": "plane",
+        "normal": [0, 0, 0]
+    }
+  ]
+},

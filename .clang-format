@@ -1,0 +1,5 @@
+BasedOnStyle: Google
+IndentWidth: 4                # Use 4 spaces for indentation
+UseTab: Never                  # Do not use tab characters; use spaces instead
+ColumnLimit: 80                 
+PointerAlignment: Right         # Align pointer types to the right (e.g., char *a)
