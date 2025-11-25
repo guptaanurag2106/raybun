@@ -14,10 +14,10 @@ void print_summary(JSON res) {
     Log(Log_Info, temp_sprintf("load_scene: Creating image of size %d x %d",
                                res.state.width, res.state.height));
     Log(Log_Info,
-        temp_sprintf("load_scene: loaded %d spheres", res.scene.sphere_count));
+        temp_sprintf("load_scene: Loaded %d spheres", res.scene.sphere_count));
     Log(Log_Info,
-        temp_sprintf("load_scene: loaded %d planes", res.scene.plane_count));
-    Log(Log_Info, temp_sprintf("load_scene: loaded %d materials",
+        temp_sprintf("load_scene: Loaded %d planes", res.scene.plane_count));
+    Log(Log_Info, temp_sprintf("load_scene: Loaded %d materials",
                                res.scene.material_count));
 }
 
@@ -42,7 +42,11 @@ JSON load_scene(const char *scene_file) {
     Scene scene = {
         .plane_count = 0, .planes = NULL, .sphere_count = 0, .spheres = NULL};
     State state = {.width = 1024, .height = 768};
-    Camera camera = {.position = {0, 0, -5}, .look_at = {0, 0, 0}, .fov = 60};
+    Camera camera = {.position = {0, 0, -5},
+                     .look_at = {0, 0, 0},
+                     .up = {0, 1, 0},
+                     .fov = DEG2RAD(60),
+                     .aspect_ratio = 4.0f / 3};
 
     // Parse config (if exists)
     cJSON *config = cJSON_GetObjectItemCaseSensitive(json, "config");
@@ -71,10 +75,30 @@ JSON load_scene(const char *scene_file) {
     if (cJSON_IsObject(cam)) {
         cJSON *fov = cJSON_GetObjectItemCaseSensitive(cam, "fov");
         if (cJSON_IsNumber(fov)) {
-            camera.fov = fov->valuedouble;
+            camera.fov = DEG2RAD(fov->valuedouble);
         } else {
             log_warn(
-                "Expected 'fov' to be a number in 'camera', using default.");
+                "Expected 'fov' to be a number (degrees) in 'camera', using "
+                "default.");
+        }
+
+        cJSON *aspect_ratio =
+            cJSON_GetObjectItemCaseSensitive(cam, "aspect_ratio");
+        if (cJSON_IsString(aspect_ratio)) {
+            const char *s = aspect_ratio->valuestring;
+            int num, den;
+
+            if (sscanf(s, "%d/%d", &num, &den) == 2 && den != 0) {
+                camera.aspect_ratio = (float)num / den;
+            } else {
+                log_warn(
+                    "Expected 'aspect_ratio' to be a string (fraction) in "
+                    "'camera', using default.");
+            }
+        } else {
+            log_warn(
+                "Expected 'aspect_ratio' to be a string (fraction) in "
+                "'camera', using default.");
         }
 
         cJSON *position = cJSON_GetObjectItemCaseSensitive(cam, "position");
@@ -99,6 +123,18 @@ JSON load_scene(const char *scene_file) {
                 "Expected 'look_at' to be an array of 3 numbers in 'camera', "
                 "using default.");
         }
+
+        cJSON *up = cJSON_GetObjectItemCaseSensitive(cam, "up");
+        if (cJSON_IsArray(up) && cJSON_GetArraySize(up) == 3) {
+            camera.up = (v3f){cJSON_GetArrayItem(up, 0)->valuedouble,
+                              cJSON_GetArrayItem(up, 1)->valuedouble,
+                              cJSON_GetArrayItem(up, 2)->valuedouble};
+        } else {
+            log_warn(
+                "Expected 'up' to be an array of 3 numbers in 'camera', "
+                "using default.");
+        }
+
     } else {
         log_warn("'camera' section not found, using default values.");
     }
@@ -193,10 +229,11 @@ JSON load_scene(const char *scene_file) {
                                     strerror(errno)));
         exit(1);
     }
+    scene.camera = camera;
 
-    JSON res = {.scene = scene, .state = state, .camera = camera};
-    Log(Log_Info, temp_sprintf("load_scene: Successfully loaded %s, summary: ",
-                               scene_file));
+    JSON res = {.scene = scene, .state = state};
+    Log(Log_Info,
+        temp_sprintf("load_scene: Successfully loaded %s", scene_file));
     print_summary(res);
 
     return res;

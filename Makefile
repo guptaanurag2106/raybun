@@ -4,7 +4,7 @@ INCLUDES = -Iinclude -I./thirdparty/cJSON-1.7.19/
 CFLAGS_DEBUG   = -Wall -Wextra -ggdb -std=c11 -DDEBUG
 CFLAGS_RELEASE = -Wall -Wextra -O3 -std=c11 -march=native -funroll-loops -flto -ffunction-sections -fdata-sections
 
-LIBS = -L./thirdparty/cJSON-1.7.19/build -lcjson
+LIBS = -L./thirdparty/cJSON-1.7.19/build -lcjson -lm
 LD_FLAGS = -flto -Wl,--gc-sections -Wl,-rpath,./thirdparty/cJSON-1.7.19/build/
 
 SRC_DIR   = src

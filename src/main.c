@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "imagerw.h"
+#include "renderer.h"
 #include "scene.h"
 #include "state.h"
 #define UTILS_IMPLEMENTATION
@@ -114,14 +115,9 @@ int main(int argc, char **argv) {
     JSON json = load_scene(scene_json_file);
     Scene scene = json.scene;
     State state = json.state;
-    Camera cam = json.camera;
 
-    for (int i = 0; i < state.width * state.height; i++) {
-        if (i < 10000)
-            state.image[i] = 0xFF0000FF;
-        else
-            state.image[i] = 0xFF00FF00;
-    }
+    calculate_camera_fields(&scene.camera);
+    render_scene(&scene, &state);
 
     export_ppm(output_name, state.image, state.width, state.height);
 

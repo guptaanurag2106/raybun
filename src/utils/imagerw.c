@@ -33,5 +33,5 @@ void export_ppm(const char *output_file_name, const uint32_t *image,
     fclose(f);
 
     Log(Log_Info,
-        temp_sprintf("export_ppm: successfully written %s", output_file_name));
+        temp_sprintf("export_ppm: Successfully written %s", output_file_name));
 }
