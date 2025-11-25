@@ -1,0 +1,105 @@
+{
+  "type": "object",
+  "properties": {
+    "config": {
+      "type": "object",
+      "description": "Configuration settings for the scene rendering.",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "description": "Width of the render window in pixels. (Default: 1024)"
+        },
+        "height": {
+          "type": "integer",
+          "description": "Height of the render window in pixels. (Default: 768)"
+        }
+      },
+      "additionalProperties": false,
+      "required": []
+    },
+    "camera": {
+      "type": "object",
+      "description": "Camera settings for the scene.",
+      "properties": {
+        "position": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "The position of the camera in the 3D space as an array [x, y, z]. (Default: [0, 0, -5])"
+        },
+        "look_at": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "The point the camera is looking at, as an array [x, y, z]. (Default: [0, 0, 0])"
+        },
+        "fov": {
+          "type": "number",
+          "description": "The field of view of the camera in degrees. (Default: 60)"
+        }
+      },
+      "additionalProperties": false,
+      "required": []
+    },
+    "objects": {
+      "type": "object",
+      "description": "Objects in the scene.",
+      "properties": {
+        "sphere": {
+          "type": "array",
+          "description": "List of spheres in the scene.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "center": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "The center of the sphere as an array [x, y, z]."
+              },
+              "radius": {
+                "type": "number",
+                "description": "The radius of the sphere."
+              }
+            },
+            "required": ["center", "radius"],
+            "additionalProperties": false
+          }
+        },
+        "plane": {
+          "type": "array",
+          "description": "List of planes in the scene.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "normal": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "The normal vector of the plane as an array [x, y, z]."
+              }
+            },
+            "required": ["normal"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": []
+    }
+  },
+  "required": ["objects"],
+  "additionalProperties": false
+}

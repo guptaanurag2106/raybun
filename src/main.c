@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 
     int mode = 0;
     char *scene_json_file = "";
-    char *output_name = "output.ppm";
+    char *output_name = "out/output.ppm";
 
     int port;
     char *master_ip = "";
@@ -114,6 +114,7 @@ int main(int argc, char **argv) {
     JSON json = load_scene(scene_json_file);
     Scene scene = json.scene;
     State state = json.state;
+    Camera cam = json.camera;
 
     for (int i = 0; i < state.width * state.height; i++) {
         if (i < 10000)

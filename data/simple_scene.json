@@ -8,20 +8,25 @@
     "look_at": [0, 0, 0],
     "fov": 60
   },
-  "objects": [
-    {
-        "type": "sphere",
-        "center": [10, 10, 10],
-        "radius": 10
-    },
-    {
-        "type": "sphere",
-        "center": [0, 0, 0],
-        "radius": 5
-    },
-    {
-        "type": "plane",
+  "objects": {
+    "sphere": [
+        {
+          "center": [10, 10, 10],
+          "radius": 10
+        },
+        {
+            "center": [0, 0, 0],
+            "radius": 5
+        }
+      ],
+    "plane": [
+      {
         "normal": [0, 0, 0]
-    }
+      }
+    ]
+  },
+  "materials": [
+    
   ]
-},
+}
+
