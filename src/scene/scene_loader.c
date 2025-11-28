@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "common.h"
 #include "scene.h"
 #include "utils.h"
 #include "vec.h"
@@ -39,14 +40,21 @@ JSON load_scene(const char *scene_file) {
         exit(1);
     }
 
-    Scene scene = {
-        .plane_count = 0, .planes = NULL, .sphere_count = 0, .spheres = NULL};
-    State state = {.width = 1024, .height = 768};
+    Scene scene = {.plane_count = 0,
+                   .planes = NULL,
+                   .sphere_count = 0,
+                   .spheres = NULL,
+                   .material_count = 0,
+                   .materials = NULL};
+    State state = {
+        .width = 1024, .height = 768, .samples_per_pixel = 10, .max_depth = 10};
     Camera camera = {.position = {0, 0, -5},
                      .look_at = {0, 0, 0},
                      .up = {0, 1, 0},
                      .fov = DEG2RAD(60),
-                     .aspect_ratio = 4.0f / 3};
+                     .aspect_ratio = 4.0f / 3,
+                     .defocus_angle = 0,
+                     .focus_dist = 1};
 
     // Parse config (if exists)
     cJSON *config = cJSON_GetObjectItemCaseSensitive(json, "config");
@@ -66,6 +74,26 @@ JSON load_scene(const char *scene_file) {
             log_warn(
                 "Expected 'height' to be a number in 'config', using default.");
         }
+
+        cJSON *samples_per_pixel =
+            cJSON_GetObjectItemCaseSensitive(config, "samples_per_pixel");
+        if (cJSON_IsNumber(samples_per_pixel)) {
+            state.samples_per_pixel = samples_per_pixel->valueint;
+        } else {
+            log_warn(
+                "Expected 'samples_per_pixel' to be a number in 'config', "
+                "using default.");
+        }
+
+        cJSON *max_depth =
+            cJSON_GetObjectItemCaseSensitive(config, "max_depth");
+        if (cJSON_IsNumber(max_depth)) {
+            state.max_depth = max_depth->valueint;
+        } else {
+            log_warn(
+                "Expected 'max_depth' to be a number in 'config', "
+                "using default.");
+        }
     } else {
         log_warn("'config' section not found, using default values.");
     }
@@ -79,6 +107,24 @@ JSON load_scene(const char *scene_file) {
         } else {
             log_warn(
                 "Expected 'fov' to be a number (degrees) in 'camera', using "
+                "default.");
+        }
+        cJSON *defocus_angle =
+            cJSON_GetObjectItemCaseSensitive(cam, "defocus_angle");
+        if (cJSON_IsNumber(defocus_angle)) {
+            camera.defocus_angle = DEG2RAD(defocus_angle->valuedouble);
+        } else {
+            log_warn(
+                "Expected 'defocus_angle' to be a number (degrees) in "
+                "'camera', using default.");
+        }
+
+        cJSON *focus_dist = cJSON_GetObjectItemCaseSensitive(cam, "focus_dist");
+        if (cJSON_IsNumber(focus_dist)) {
+            camera.focus_dist = focus_dist->valuedouble;
+        } else {
+            log_warn(
+                "Expected 'focus_dist' to be a number in 'camera', using "
                 "default.");
         }
 
@@ -156,9 +202,13 @@ JSON load_scene(const char *scene_file) {
                     cJSON_GetObjectItemCaseSensitive(sphere, "center");
                 cJSON *radius =
                     cJSON_GetObjectItemCaseSensitive(sphere, "radius");
+                cJSON *mat_index =
+                    cJSON_GetObjectItemCaseSensitive(sphere, "material");
 
-                if (cJSON_IsArray(center) && cJSON_GetArraySize(center) == 3 &&
-                    cJSON_IsNumber(radius)) {
+                if (cJSON_IsArray(center) && cJSON_IsNumber(mat_index) &&
+                    cJSON_GetArraySize(center) == 3 && cJSON_IsNumber(radius) &&
+                    radius->valuedouble > 0) {
+                    temp_spheres[valid_spheres].mat_index = mat_index->valueint;
                     temp_spheres[valid_spheres].center =
                         (v3f){cJSON_GetArrayItem(center, 0)->valuedouble,
                               cJSON_GetArrayItem(center, 1)->valuedouble,
@@ -179,7 +229,8 @@ JSON load_scene(const char *scene_file) {
                 scene.spheres = NULL;
             }
         } else {
-            log_warn("'sphere' should be an array in 'objects', skipping.");
+            if (sphere_items != NULL)
+                log_warn("'sphere' should be an array in 'objects', skipping.");
         }
 
         cJSON *plane_items = cJSON_GetObjectItemCaseSensitive(objects, "plane");
@@ -193,12 +244,23 @@ JSON load_scene(const char *scene_file) {
                 cJSON *plane = cJSON_GetArrayItem(plane_items, i);
                 cJSON *normal =
                     cJSON_GetObjectItemCaseSensitive(plane, "normal");
+                cJSON *point = cJSON_GetObjectItemCaseSensitive(plane, "point");
+                cJSON *mat_index =
+                    cJSON_GetObjectItemCaseSensitive(plane, "material");
 
-                if (cJSON_IsArray(normal) && cJSON_GetArraySize(normal) == 3) {
-                    temp_planes[valid_planes].normal =
+                if (cJSON_IsArray(normal) && cJSON_IsArray(point) &&
+                    cJSON_IsNumber(mat_index) &&
+                    cJSON_GetArraySize(normal) == 3 &&
+                    cJSON_GetArraySize(point) == 3) {
+                    temp_planes[valid_planes].mat_index = mat_index->valueint;
+                    temp_planes[valid_planes].normal = v3f_normalize(
                         (v3f){cJSON_GetArrayItem(normal, 0)->valuedouble,
                               cJSON_GetArrayItem(normal, 1)->valuedouble,
-                              cJSON_GetArrayItem(normal, 2)->valuedouble};
+                              cJSON_GetArrayItem(normal, 2)->valuedouble});
+                    temp_planes[valid_planes].point =
+                        (v3f){cJSON_GetArrayItem(point, 0)->valuedouble,
+                              cJSON_GetArrayItem(point, 1)->valuedouble,
+                              cJSON_GetArrayItem(point, 2)->valuedouble};
                     valid_planes++;
                 } else {
                     log_warn("Invalid 'plane' entry, skipping.");
@@ -214,10 +276,91 @@ JSON load_scene(const char *scene_file) {
                 scene.planes = NULL;
             }
         } else {
-            log_warn("'plane' should be an array in 'objects', skipping.");
+            if (sphere_items != NULL)
+                log_warn("'plane' should be an array in 'objects', skipping.");
         }
     } else {
         log_warn("'objects' section not found or malformed.");
+    }
+
+    cJSON *materials = cJSON_GetObjectItemCaseSensitive(json, "materials");
+    if (cJSON_IsArray(materials)) {
+        int total_mat = cJSON_GetArraySize(materials);
+        Material *temp_materials =
+            malloc(sizeof(Material) * total_mat);  // Temporary allocation
+
+        int valid_materials = 0;
+        for (int i = 0; i < total_mat; i++) {
+            cJSON *material = cJSON_GetArrayItem(materials, i);
+            cJSON *type = cJSON_GetObjectItemCaseSensitive(material, "type");
+            cJSON *albedo =
+                cJSON_GetObjectItemCaseSensitive(material, "albedo");
+
+            if (cJSON_IsString(type)) {
+                MaterialType mat_type = mat_to_string(type->valuestring);
+                temp_materials[valid_materials].type = mat_type;
+                if (mat_type == MAT_LAMBERTIAN && cJSON_IsArray(albedo) &&
+                    cJSON_GetArraySize(albedo) == 3) {
+                    temp_materials[valid_materials]
+                        .properties.lambertian.albedo =
+
+                        (v3f){cJSON_GetArrayItem(albedo, 0)->valuedouble,
+                              cJSON_GetArrayItem(albedo, 1)->valuedouble,
+                              cJSON_GetArrayItem(albedo, 2)->valuedouble};
+                } else if (mat_type == MAT_METAL && cJSON_IsArray(albedo) &&
+                           cJSON_GetArraySize(albedo) == 3) {
+                    cJSON *jfuzz =
+                        cJSON_GetObjectItemCaseSensitive(material, "fuzz");
+                    float fuzz = 0;
+                    if (cJSON_IsNumber(jfuzz)) {
+                        fuzz = jfuzz->valuedouble;
+                        if (fuzz < 0 || fuzz > 1) {
+                            fuzz = clamp_float(fuzz, 0, 1);
+                            log_warn(
+                                "Invalid 'fuzz' entry, must be between 0, 1, "
+                                "using default.");
+                        }
+                    }
+                    temp_materials[valid_materials].properties.metal.albedo =
+
+                        (v3f){cJSON_GetArrayItem(albedo, 0)->valuedouble,
+                              cJSON_GetArrayItem(albedo, 1)->valuedouble,
+                              cJSON_GetArrayItem(albedo, 2)->valuedouble};
+                    temp_materials[valid_materials].properties.metal.fuzz =
+                        fuzz;
+                } else if (mat_type == MAT_DIELECTRIC) {
+                    cJSON *jetai_eta = cJSON_GetObjectItemCaseSensitive(
+                        material, "refraction_index");
+                    if (cJSON_IsNumber(jetai_eta)) {
+                        temp_materials[valid_materials]
+                            .properties.dielectric.etai_eta =
+                            jetai_eta->valuedouble;
+                    } else {
+                        log_warn(
+                            "Invalid 'refractive_index' entry using default.");
+                        temp_materials[valid_materials]
+                            .properties.dielectric.etai_eta = 1;
+                    }
+                } else {
+                    log_warn("Unkown 'type', skipping.");
+                }
+                valid_materials++;
+            } else {
+                log_warn("Invalid 'material' entry, skipping.");
+            }
+        }
+
+        scene.material_count = valid_materials;
+        if (valid_materials > 0) {
+            scene.materials =
+                realloc(temp_materials, sizeof(Material) * valid_materials);
+        } else {
+            free(temp_materials);
+            scene.materials = NULL;
+        }
+    } else {
+        if (materials != NULL)
+            log_warn("'material' should be an array in 'objects', skipping.");
     }
 
     cJSON_Delete(json);
@@ -234,7 +377,6 @@ JSON load_scene(const char *scene_file) {
     JSON res = {.scene = scene, .state = state};
     Log(Log_Info,
         temp_sprintf("load_scene: Successfully loaded %s", scene_file));
-    print_summary(res);
 
     return res;
 }

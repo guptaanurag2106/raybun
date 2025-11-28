@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "imagerw.h"
 #include "renderer.h"
@@ -39,7 +40,7 @@ int main(int argc, char **argv) {
 
     int mode = 0;
     char *scene_json_file = "";
-    char *output_name = "out/output.ppm";
+    char *output_name = "data/simple_scene.png";
 
     int port;
     char *master_ip = "";
@@ -113,13 +114,16 @@ int main(int argc, char **argv) {
            mode);
 
     JSON json = load_scene(scene_json_file);
+    print_summary(json);
     Scene scene = json.scene;
     State state = json.state;
+
+    srand(time(NULL));
 
     calculate_camera_fields(&scene.camera);
     render_scene(&scene, &state);
 
-    export_ppm(output_name, state.image, state.width, state.height);
+    export_image(output_name, state.image, state.width, state.height);
 
     return 0;
 }

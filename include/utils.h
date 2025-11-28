@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 
 #ifdef _cplusplus
 extern "C" {
@@ -117,6 +118,15 @@ static inline char *shift(int *argc, char ***argv) {
 }
 
 char *generate_uuid();
+static inline void timersub(const struct timeval *a, const struct timeval *b,
+                            struct timeval *result) {
+    result->tv_sec = a->tv_sec - b->tv_sec;
+    result->tv_usec = a->tv_usec - b->tv_usec;
+    if (result->tv_usec < 0) {
+        result->tv_sec--;
+        result->tv_usec += 1000000;
+    }
+}
 
 // ----------------------------------------------------------------------------
 //  Math Utils
@@ -125,6 +135,7 @@ char *generate_uuid();
 #define PI_2 (PI / 2)
 #define PI_3_4 (3.0f * PI / 4)
 #define PI_2_3 (2.0f * PI / 3)
+#define EPS 1e-8
 
 #define DEG2RAD(_d) ((_d) * (PI / 180.0f))
 #define RAD2DEG(_r) ((_r) * (180.0f / PI))
@@ -173,6 +184,12 @@ static inline bool is_number(const char *s) {
 WRAP_TYPE(int)
 WRAP_TYPE(float)
 WRAP_TYPE(double)
+
+static inline float randf() { return rand() / (RAND_MAX + 1.0); }
+
+static inline float rand_range(float min, float max) {
+    return min + (max - min) * randf();
+}
 
 int calculate_infix(const char *expr);  // 34+5*10+3 -> 88 just +-*/%
 

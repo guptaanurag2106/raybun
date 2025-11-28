@@ -1,13 +1,22 @@
 #include "renderer.h"
 
+#include <math.h>
 #include <stdint.h>
+#include <sys/time.h>
 
+#include "common.h"
+#include "rinternal.h"
 #include "scene.h"
+#include "utils.h"
 #include "vec.h"
 
-uint32_t pack_colour(float r, float g, float b, float a) {
-    return (((uint8_t)(a * 255)) << 24) | (((uint8_t)(r * 255)) << 16) |
-           (((uint8_t)(g * 255)) << 8) | ((uint8_t)(b * 255));
+// argb
+uint32_t pack_colour(Colour colour) {
+    colour = v3f_clamp(colour, 0, 1);
+    return (((uint8_t)(255)) << 24) |
+           (((uint8_t)(linear_to_gamma(colour.x) * 255)) << 16) |
+           (((uint8_t)(linear_to_gamma(colour.y) * 255)) << 8) |
+           ((uint8_t)(linear_to_gamma(colour.z) * 255));
 }
 
 void calculate_camera_fields(Camera *cam) {
@@ -16,49 +25,40 @@ void calculate_camera_fields(Camera *cam) {
     cam->right = v3f_normalize(v3f_cross(cam->forward, cam->up));
     cam->up = v3f_cross(cam->right, cam->forward);
 
-    cam->viewport_h = 2 * tanf(cam->fov / 2.0f);
+    cam->viewport_h = 2 * tanf(cam->fov / 2.0f) * cam->focus_dist;
     cam->viewport_w = cam->aspect_ratio * cam->viewport_h;
     cam->focal_length = 1 / tanf(cam->fov / 2);
 }
 
-Hit hit_sphere(Ray ray, Scene *scene) {
-    for (int i = 0; i < scene->sphere_count; i++) {
-        Sphere sphere = scene->spheres[i];
-        v3f oc = v3f_sub(sphere.center, ray.origin);
-        float a = v3f_slength(ray.direction);
-        float h = v3f_dot(ray.direction, oc);
-        float c = v3f_slength(oc) - sphere.radius * sphere.radius;
+Colour ray_colour(Ray *ray, Scene *scene, int depth, int *ray_count) {
+    (*ray_count)++;
+    if (depth <= 0) return (Colour){0, 0, 0};
+    HitRecord record = {0};
+    if (scene_hit(ray, scene, 0.001, INFINITY,
+                  &record)) {  // 0.001: floating pound rounding error, if the
+                               // origin is too close to surface then
+                               // intersection point may be inside the surface
+                               // then the ray will just bounce inside
+        Ray scattered;
+        Colour attenuation;
 
-        float discriminant = (h * h - a * c);
-        if (discriminant >= 0) {
-            float t = (h - sqrtf(discriminant)) / a;
-            if (t < 0) {
-                t = (h + sqrtf(discriminant)) / a;
-                if (t > 0) {  // TODO: >0 or some near_point?
-                    return (Hit){i, t};
-                }
-            } else {
-                return (Hit){
-                    i, t};  // FIX: hit first sphere at first point, incorrect,
-                            // check minimum t across all spheres
-            }
+        if (record.mat_index >= scene->material_count) {
+            Log(Log_Error,
+                temp_sprintf("Material had a mat_index of:%d, greater than "
+                             "number of mterials: %d ",
+                             record.mat_index, scene->material_count));
+            exit(1);
         }
+        if (scatter(&scene->materials[record.mat_index], &record, ray,
+                    &attenuation, &scattered)) {
+            return v3f_comp_mul(attenuation, ray_colour(&scattered, scene,
+                                                        depth - 1, ray_count));
+        }
+        return (Colour){0, 0, 0};
     }
-    return (Hit){-1, -1};
-}
 
-uint32_t ray_colour(Ray ray, Scene *scene) {
-    Hit hit_s = hit_sphere(ray, scene);
-    uint32_t colour;
-    if (hit_s.sphere_index != -1) {
-        v3f N = v3f_normalize(v3f_sub(ray_at(ray, hit_s.t), (v3f){0, 0, -1}));
-        colour =
-            pack_colour(0.5 * (1 + N.x), 0.5 * (1 + N.y), 0.5 * (1 + N.z), 1);
-    } else {
-        float a = 0.5 * (v3f_normalize(ray.direction).y + 1);
-        colour = pack_colour(1 - 0.5 * a, 1 - 0.3 * a, 1, 1);
-    }
-    return colour;
+    float a = 0.5 * (v3f_normalize(ray->direction).y + 1);
+    return (Colour){1 - 0.5 * a, 1 - 0.3 * a, 1};
 }
 
 void render_scene(Scene *scene, State *state) {
@@ -67,27 +67,63 @@ void render_scene(Scene *scene, State *state) {
 
     Camera cam = scene->camera;
 
-    v3f vu = {cam.viewport_w, 0, 0};
-    v3f vv = {0, -cam.viewport_h, 0};
+    v3f vu = v3f_mulf(cam.right, cam.viewport_w);
+    v3f vv = v3f_mulf(cam.up, -cam.viewport_h);
 
     v3f pixel_delta_u = v3f_divf(vu, width);
     v3f pixel_delta_v = v3f_divf(vv, height);
 
     v3f viewport_top_left =
-        v3f_sub(v3f_add(cam.position, v3f_mulf(cam.forward, cam.focal_length)),
+        v3f_sub(v3f_add(cam.position, v3f_mulf(cam.forward, cam.focus_dist)),
                 v3f_add(v3f_divf(vu, 2), v3f_divf(vv, 2)));
 
     v3f pixel00_loc =
         v3f_add(viewport_top_left,
                 v3f_mulf(v3f_add(pixel_delta_u, pixel_delta_v), 0.5));
 
+    float defocus_radius = cam.focus_dist * tanf(cam.defocus_angle / 2);
+    v3f defocus_disk_u = v3f_mulf(cam.right, defocus_radius);
+    v3f defocus_disk_v = v3f_mulf(cam.up, defocus_radius);
+
+    int ray_count = 0;
+    struct timeval start, end, diff;
+    gettimeofday(&start, NULL);
+    const float colour_contribution = 1.0f / state->samples_per_pixel;
+
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
-            v3f pixel_center =
-                v3f_add(pixel00_loc, v3f_add(v3f_mulf(pixel_delta_u, i),
-                                             v3f_mulf(pixel_delta_v, j)));
-            Ray ray = {cam.position, v3f_sub(pixel_center, cam.position)};
-            state->image[j * width + i] = ray_colour(ray, scene);
+            Colour colour = (v3f){0, 0, 0};
+
+            for (int s = 0; s < state->samples_per_pixel; s++) {
+                v3f pixel_center = v3f_add(
+                    pixel00_loc,
+                    v3f_add(v3f_mulf(pixel_delta_u, i + randf() - 0.5),
+                            v3f_mulf(pixel_delta_v, j + randf() - 0.5)));
+                v3f ray_origin;
+                if (cam.defocus_angle <= 0) {
+                    ray_origin = cam.position;
+                } else {
+                    v3f p = v3f_random_in_unit_disk();
+                    ray_origin = v3f_add(
+                        cam.position, v3f_add(v3f_mulf(defocus_disk_u, p.x),
+                                              v3f_mulf(defocus_disk_v, p.y)));
+                }
+                Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position)};
+                colour = v3f_add(
+                    ray_colour(&ray, scene, state->max_depth, &ray_count),
+                    colour);
+            }
+
+            state->image[j * width + i] =
+                pack_colour(v3f_mulf(colour, colour_contribution));
         }
     }
+    gettimeofday(&end, NULL);
+    timersub(&end, &start, &diff);
+
+    double seconds = diff.tv_sec + diff.tv_usec * 1e-6;
+    double time_per_ray = seconds / ray_count;
+
+    Log(Log_Info, temp_sprintf("Rendered %d rays in %lds or %fs/ray", ray_count,
+                               (long int)diff.tv_sec, time_per_ray));
 }

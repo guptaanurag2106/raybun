@@ -1,105 +1,161 @@
 {
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
     "config": {
       "type": "object",
-      "description": "Configuration settings for the scene rendering.",
       "properties": {
         "width": {
           "type": "integer",
-          "description": "Width of the render window in pixels. (Default: 1024)"
+          "description": "Width of the output image in pixels."
         },
         "height": {
           "type": "integer",
-          "description": "Height of the render window in pixels. (Default: 768)"
+          "description": "Height of the output image in pixels."
+        },
+        "samples_per_pixel": {
+          "type": "integer",
+          "description": "Number of rays per pixel for anti-aliasing."
+        },
+        "max_depth": {
+          "type": "integer",
+          "description": "Maximum recursion depth for ray tracing."
         }
       },
-      "additionalProperties": false,
-      "required": []
+      "required": ["width", "height", "samples_per_pixel", "max_depth"]
     },
     "camera": {
       "type": "object",
-      "description": "Camera settings for the scene.",
       "properties": {
         "position": {
           "type": "array",
-          "items": {
-            "type": "number"
-          },
+          "items": { "type": "number" },
           "minItems": 3,
           "maxItems": 3,
-          "description": "The position of the camera in the 3D space as an array [x, y, z]. (Default: [0, 0, -5])"
+          "description": "Position of the camera in 3D space (x, y, z)."
         },
         "look_at": {
           "type": "array",
-          "items": {
-            "type": "number"
-          },
+          "items": { "type": "number" },
           "minItems": 3,
           "maxItems": 3,
-          "description": "The point the camera is looking at, as an array [x, y, z]. (Default: [0, 0, 0])"
+          "description": "Point in space where the camera is looking (x, y, z)."
+        },
+        "up": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "The up direction for the camera (x, y, z)."
         },
         "fov": {
+          "type": "integer",
+          "description": "Field of view (in degrees) of the camera."
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "pattern": "^\\d+/\\d+$",
+          "description": "Aspect ratio as a string, e.g., '16/9'."
+        },
+        "defocus_angle": {
           "type": "number",
-          "description": "The field of view of the camera in degrees. (Default: 60)"
+          "description": "Amount of defocus blur for the camera lens."
+        },
+        "focus_dist": {
+          "type": "number",
+          "description": "Distance at which the camera is focused."
         }
       },
-      "additionalProperties": false,
-      "required": []
+      "required": ["position", "look_at", "up", "fov", "aspect_ratio"]
     },
     "objects": {
       "type": "object",
-      "description": "Objects in the scene.",
       "properties": {
         "sphere": {
           "type": "array",
-          "description": "List of spheres in the scene.",
           "items": {
             "type": "object",
             "properties": {
               "center": {
                 "type": "array",
-                "items": {
-                  "type": "number"
-                },
+                "items": { "type": "number" },
                 "minItems": 3,
                 "maxItems": 3,
-                "description": "The center of the sphere as an array [x, y, z]."
+                "description": "Center of the sphere in 3D space (x, y, z)."
               },
               "radius": {
                 "type": "number",
-                "description": "The radius of the sphere."
+                "description": "Radius of the sphere."
+              },
+              "material": {
+                "type": "integer",
+                "description": "Index of the material used by the sphere."
               }
             },
-            "required": ["center", "radius"],
-            "additionalProperties": false
-          }
+            "required": ["center", "radius", "material"]
+          },
+          "description": "List of spheres in the scene."
         },
         "plane": {
           "type": "array",
-          "description": "List of planes in the scene.",
           "items": {
             "type": "object",
             "properties": {
               "normal": {
                 "type": "array",
-                "items": {
-                  "type": "number"
-                },
+                "items": { "type": "number" },
                 "minItems": 3,
                 "maxItems": 3,
-                "description": "The normal vector of the plane as an array [x, y, z]."
+                "description": "Normal vector of the plane (x, y, z)."
+              },
+              "point": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "A point on the plane (x, y, z)."
+              },
+              "material": {
+                "type": "integer",
+                "description": "Index of the material used by the plane."
               }
             },
-            "required": ["normal"],
-            "additionalProperties": false
-          }
+            "required": ["normal", "point", "material"]
+          },
+          "description": "List of planes in the scene."
         }
       },
-      "additionalProperties": false,
-      "required": []
+      "required": ["sphere", "plane"]
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Type of the material (e.g., 'lambertian', 'metal', 'dielectric')."
+          },
+          "albedo": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Color of the material as RGB values."
+          },
+          "fuzz": {
+            "type": "number",
+            "description": "Fuzziness of the metal material (for roughness)."
+          },
+          "refraction_index": {
+            "type": "number",
+            "description": "Refraction index of the dielectric material."
+          }
+        },
+        "required": ["type"]
+      },
+      "description": "List of materials used in the scene."
     }
   },
-  "required": ["objects"],
-  "additionalProperties": false
+  "required": ["config", "camera", "objects", "materials"]
 }
