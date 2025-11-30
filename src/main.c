@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
     int mode = 0;
     char *scene_json_file = "";
-    char *output_name = "data/simple_scene.png";
+    char *output_name = "data/simple_scene.ppm";
 
     int port;
     char *master_ip = "";
@@ -94,11 +94,10 @@ int main(int argc, char **argv) {
             mode = 2;
         } else if (strncmp(flag, "benchmark", 9) == 0) {
             if (argc <= 0) {
-                print_args_error(
-                    prog_name,
-                    "subcommand 'benchmark': expected scene.json file");
+                scene_json_file = "data/benchmark.json";
+            } else {
+                scene_json_file = shift(&argc, &argv);
             }
-            scene_json_file = shift(&argc, &argv);
             mode = 3;
         } else if (strncmp(flag, "-h", 2) == 0 ||
                    strncmp(flag, "--help", 6) == 0) {
@@ -110,9 +109,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("%s %s %d %s %d\n", scene_json_file, output_name, port, master_ip,
-           mode);
-
     JSON json = load_scene(scene_json_file);
     print_summary(json);
     Scene scene = json.scene;
@@ -120,10 +116,36 @@ int main(int argc, char **argv) {
 
     srand(time(NULL));
 
+    struct timeval start, end, diff;
+    gettimeofday(&start, NULL);
+
     calculate_camera_fields(&scene.camera);
     render_scene(&scene, &state);
 
-    export_image(output_name, state.image, state.width, state.height);
+    gettimeofday(&end, NULL);
+    timersub(&end, &start, &diff);
+
+    double seconds = diff.tv_sec + diff.tv_usec * 1e-6;
+
+    if (mode == 3) {
+        float tmin = 5;
+        float tmax = 20;
+        float perf_score = -1;
+        if (seconds >= tmax)
+            perf_score = 0;
+        else if (seconds <= tmin)
+            perf_score = 10;
+        else
+            perf_score = 10.0 * (1.0 - (seconds - tmin) / (tmax - tmin));
+        Log(Log_Info,
+            temp_sprintf(
+                "Benchmark results: Completed in %fs, Performance Score: %f/10",
+                seconds, perf_score));
+    }
+
+    if (mode != 3) {
+        export_image(output_name, state.image, state.width, state.height);
+    }
 
     return 0;
 }
