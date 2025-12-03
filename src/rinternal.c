@@ -38,7 +38,7 @@ bool sphere_hit(const Sphere *sphere, const Ray *ray, float tmin, float tmax,
 bool plane_hit(const Plane *plane, const Ray *ray, float tmin, float tmax,
                HitRecord *record) {
     const float nd = v3f_dot(plane->normal, ray->direction);
-    if (nd < EPS) return false;
+    if (fabs(nd) < EPS) return false;
 
     const float t = (plane->d - v3f_dot(plane->normal, ray->origin)) / nd;
 
@@ -52,10 +52,11 @@ bool plane_hit(const Plane *plane, const Ray *ray, float tmin, float tmax,
     return true;
 }
 
+// TODO: quads only face 1 way?
 bool quad_hit(const Quad *quad, const Ray *ray, float tmin, float tmax,
               HitRecord *record) {
     const float nd = v3f_dot(quad->normal, ray->direction);
-    if (nd < EPS) return false;
+    if (fabs(nd) < EPS) return false;  // no parallel rays
 
     const float t = (quad->d - v3f_dot(quad->normal, ray->origin)) / nd;
     if (t <= tmin || t >= tmax) return false;

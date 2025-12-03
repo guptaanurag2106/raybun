@@ -10,6 +10,9 @@
 #include "utils.h"
 #include "vec.h"
 
+//FIX: why does background colour matter in cornell box? when it is covered from all sides
+const Colour BACKGROUND = {0.1,0.1,0.1};
+
 // argb
 uint32_t pack_colour(Colour colour) {
     colour = v3f_clamp(colour, 0, 1);
@@ -20,7 +23,6 @@ uint32_t pack_colour(Colour colour) {
 }
 
 void calculate_camera_fields(Camera *cam) {
-    // TODO: see what is needed
     cam->forward = v3f_normalize(v3f_sub(cam->look_at, cam->position));
     cam->right = v3f_normalize(v3f_cross(cam->forward, cam->up));
     cam->up = v3f_cross(cam->right, cam->forward);
@@ -41,24 +43,22 @@ Colour ray_colour(Ray *ray, Scene *scene, int depth, int *ray_count) {
                                // then the ray will just bounce inside
         Ray scattered;
         Colour attenuation;
+        Colour colour_emission = ORIGIN;
 
-        if (record.mat_index >= scene->material_count) {
-            Log(Log_Error,
-                temp_sprintf("Material had a mat_index of:%d, greater than "
-                             "number of mterials: %d ",
-                             record.mat_index, scene->material_count));
-            exit(1);
+        Material *mat = &scene->materials[record.mat_index];
+        if (mat->type == MAT_EMISSIVE) {
+            colour_emission = mat->properties.emissive.emission;
         }
-        if (scatter(&scene->materials[record.mat_index], &record, ray,
-                    &attenuation, &scattered)) {
-            return v3f_comp_mul(attenuation, ray_colour(&scattered, scene,
-                                                        depth - 1, ray_count));
+
+        if (!scatter(mat, &record, ray, &attenuation, &scattered)) {
+            return colour_emission;
         }
-        return (Colour){0, 0, 0};
+        Colour scatter = v3f_comp_mul(
+            attenuation, ray_colour(&scattered, scene, depth - 1, ray_count));
+        return v3f_add(colour_emission, scatter);
     }
 
-    float a = 0.5 * (v3f_normalize(ray->direction).y + 1);
-    return (Colour){1 - 0.5 * a, 1 - 0.3 * a, 1};
+    return BACKGROUND;
 }
 
 void render_scene(Scene *scene, State *state) {
