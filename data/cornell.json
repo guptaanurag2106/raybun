@@ -1,26 +1,29 @@
 {
   "config": {
-    "width": 1920,
+    "width": 1080,
     "height": 1080,
-    "samples_per_pixel": 150,
-    "max_depth": 50
+    "samples_per_pixel": 100,
+    "max_depth": 100
   },
   "camera": {
-    "position": [0, 2, 8],
-    "look_at": [0, 1, 0],
+    "position": [0, 0, 80],
+    "look_at": [0, 0, 0],
     "up": [0, 1, 0],
     "fov": 90,
-    "aspect_ratio": "16/9",
-    "defocus_angle": 0.1,
-    "focus_dist": 4.0
+    "aspect_ratio": "1/1",
+    "defocus_angle": 0,
+    "focus_dist": 10.0
   },
+
   "objects": {
     "sphere": [
-      { "center": [-5, 2, -5], "radius": 2.0, "material": 1 },
-      { "center": [4, 7, -7], "radius": 1.5, "material": 2 }
     ],
-    "quads": [
-        {
+
+    "plane": [
+    ],
+
+    "quad": [
+     {
           "corner": [-120, -120, -40],
           "u": [0, 240, 0],
           "v": [0, 0, -160],
@@ -56,8 +59,25 @@
           "v": [0, 0, -40],
           "material": 1
         }
+    ],
+
+    "triangle": [
+    ],
+
+    "boxes": [
+        {
+            "a": [-40, -120, -140],
+            "b": [-100, 20, -200],
+            "material": 2
+        },
+        {
+            "a": [-40, -120, -120],
+            "b": [0, -20, -80],
+            "material": 2
+        }
     ]
   },
+
   "materials": [
     { "type": "dielectric", "refraction_index": 1.5 },
     { "type": "emissive", "emission": [1, 1, 1] },
@@ -70,3 +90,4 @@
     { "type": "lambertian", "albedo": [0.7, 0.7, 0.7] }
   ]
 }
+
