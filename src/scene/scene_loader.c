@@ -1,4 +1,5 @@
 #include <cJSON.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -6,6 +7,11 @@
 #include "scene.h"
 #include "utils.h"
 #include "vec.h"
+
+void fatal(const char *msg) {
+    Log(Log_Error, msg);
+    exit(1);
+}
 
 void log_warn(const char *msg) {
     Log(Log_Warn, temp_sprintf("load_scene: %s", msg));
@@ -20,447 +26,363 @@ void print_summary(JSON res) {
         temp_sprintf("load_scene: Loaded %d planes", res.scene.plane_count));
     Log(Log_Info,
         temp_sprintf("load_scene: Loaded %d quads", res.scene.quad_count));
+    Log(Log_Info, temp_sprintf("load_scene: Loaded %d triangles",
+                               res.scene.triangle_count));
     Log(Log_Info, temp_sprintf("load_scene: Loaded %d materials",
                                res.scene.material_count));
 }
 
 // TODO: check what all actually needs to be normalized
+static V3f parse_v3f(cJSON *arr, const char *ctx, V3f fallback) {
+    if (!cJSON_IsArray(arr) || cJSON_GetArraySize(arr) != 3) {
+        log_warn(temp_sprintf("%s: expected array[3], using default.", ctx));
+        printf("asdf: %s  %d", ctx, cJSON_GetArraySize(arr));
+        return fallback;
+    }
+    return (V3f){cJSON_GetArrayItem(arr, 0)->valuedouble,
+                 cJSON_GetArrayItem(arr, 1)->valuedouble,
+                 cJSON_GetArrayItem(arr, 2)->valuedouble};
+}
+
+static float parse_float(cJSON *node, const char *ctx, float fallback) {
+    if (!cJSON_IsNumber(node)) {
+        log_warn(temp_sprintf("%s: expected number, using default.", ctx));
+        return fallback;
+    }
+    return node->valuedouble;
+}
+
+static int parse_int(cJSON *node, const char *ctx, int fallback) {
+    if (!cJSON_IsNumber(node)) {
+        log_warn(temp_sprintf("%s: expected integer, using default.", ctx));
+        return fallback;
+    }
+    return node->valueint;
+}
+
+static int parse_mat_index(cJSON *node, int mat_count, const char *ctx) {
+    if (!cJSON_IsNumber(node) || node->valueint < 0 ||
+        node->valueint >= mat_count) {
+        log_warn(temp_sprintf("%s: invalid material index.", ctx));
+        return -1;
+    }
+    return node->valueint;
+}
+
+static Quad make_quad(V3f corner, V3f u, V3f v, int mat_index) {
+    Quad q = {0};
+    q.corner = corner;
+    q.u = u;
+    q.v = v;
+    q.mat_index = mat_index;
+
+    V3f n = v3f_cross(u, v);
+    float L = v3f_slength(n);
+    V3f nn = v3f_mulf(n, 1.0f / sqrtf(L));
+
+    q.normal = nn;
+    q.d = v3f_dot(nn, corner);
+    q.w = v3f_mulf(n, 1.0f / L);
+
+    return q;
+}
+
+static void append_quad(Scene *scene, Quad quad) {
+    scene->quads =
+        realloc(scene->quads, sizeof(Quad) * (scene->quad_count + 1));
+    scene->quads[scene->quad_count++] = quad;
+}
+
+static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
+    V3f minp = {fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z)};
+
+    V3f maxp = {fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z)};
+
+    V3f dx = {maxp.x - minp.x, 0, 0};
+    V3f dy = {0, maxp.y - minp.y, 0};
+    V3f dz = {0, 0, maxp.z - minp.z};
+
+    // front
+    append_quad(scene,
+                make_quad((V3f){minp.x, minp.y, maxp.z}, dy, dx, mat_index));
+
+    // right
+    append_quad(scene, make_quad((V3f){maxp.x, minp.y, maxp.z}, dy,
+                                 (V3f){-dz.x, -dz.y, -dz.z}, mat_index));
+
+    // back
+    append_quad(scene, make_quad((V3f){maxp.x, minp.y, minp.z},
+                                 dy, (V3f){-dx.x, -dx.y, -dx.z}, mat_index));
+
+    // left
+    append_quad(scene,
+                make_quad((V3f){minp.x, minp.y, minp.z}, dy, dz, mat_index));
+
+    // top
+    append_quad(scene, make_quad((V3f){minp.x, maxp.y, maxp.z},
+                                 (V3f){-dz.x, -dz.y, -dz.z}, dx, mat_index));
+
+    // bottom
+    append_quad(scene,
+                make_quad((V3f){minp.x, minp.y, minp.z}, dz, dx, mat_index));
+}
+
+static int parse_quad(Scene *scene, cJSON *qnode) {
+    cJSON *corner = cJSON_GetObjectItemCaseSensitive(qnode, "corner");
+    cJSON *u = cJSON_GetObjectItemCaseSensitive(qnode, "u");
+    cJSON *v = cJSON_GetObjectItemCaseSensitive(qnode, "v");
+    cJSON *mat_i = cJSON_GetObjectItemCaseSensitive(qnode, "material");
+
+    int mi = parse_mat_index(mat_i, scene->material_count, "quad.material");
+    if (mi < 0) return 0;
+
+    V3f C = parse_v3f(corner, "quad.corner", (V3f){0});
+    V3f U = parse_v3f(u, "quad.u", (V3f){0});
+    V3f V = parse_v3f(v, "quad.v", (V3f){0});
+
+    append_quad(scene, make_quad(C, U, V, mi));
+    return 1;
+}
+
 JSON load_scene(const char *scene_file) {
     const char *file = read_entire_file(scene_file);
-    if (file == NULL) {
-        exit(1);
-    }
+    if (!file) fatal("load_scene: cannot read file.");
 
     cJSON *json = cJSON_Parse(file);
     free((void *)file);
 
-    if (json == NULL) {
-        const char *error_ptr = cJSON_GetErrorPtr();
-        if (error_ptr != NULL) {
-            Log(Log_Error, temp_sprintf("load_scene: %s", error_ptr));
-        }
-        cJSON_Delete(json);
-        exit(1);
+    if (!json) {
+        fatal(temp_sprintf(
+            "load_scene: JSON parse error near: %s",
+            cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() : "unknown"));
     }
 
-    Scene scene = {.plane_count = 0,
-                   .planes = NULL,
-                   .sphere_count = 0,
-                   .spheres = NULL,
-                   .quad_count = 0,
-                   .quads = 0,
-                   .material_count = 0,
-                   .materials = NULL};
+    Scene scene = {0};
     State state = {
         .width = 1024, .height = 768, .samples_per_pixel = 10, .max_depth = 10};
     Camera camera = {.position = {0, 0, -5},
                      .look_at = {0, 0, 0},
                      .up = {0, 1, 0},
                      .fov = DEG2RAD(60),
-                     .aspect_ratio = 4.0f / 3,
+                     .aspect_ratio = 4.f / 3.f,
                      .defocus_angle = 0,
                      .focus_dist = 1};
 
-    // Parse config (if exists)
     cJSON *config = cJSON_GetObjectItemCaseSensitive(json, "config");
     if (cJSON_IsObject(config)) {
-        cJSON *width = cJSON_GetObjectItemCaseSensitive(config, "width");
-        if (cJSON_IsNumber(width)) {
-            state.width = width->valueint;
-        } else {
-            log_warn(
-                "Expected 'width' to be a number in 'config', using default.");
-        }
+        state.width =
+            parse_int(cJSON_GetObjectItemCaseSensitive(config, "width"),
+                      "config.width", state.width);
+        state.height =
+            parse_int(cJSON_GetObjectItemCaseSensitive(config, "height"),
+                      "config.height", state.height);
+        state.samples_per_pixel = parse_int(
+            cJSON_GetObjectItemCaseSensitive(config, "samples_per_pixel"),
+            "config.spp", state.samples_per_pixel);
+        state.max_depth =
+            parse_int(cJSON_GetObjectItemCaseSensitive(config, "max_depth"),
+                      "config.max_depth", state.max_depth);
+    } else
+        log_warn("config: not found, using defaults.");
 
-        cJSON *height = cJSON_GetObjectItemCaseSensitive(config, "height");
-        if (cJSON_IsNumber(height)) {
-            state.height = height->valueint;
-        } else {
-            log_warn(
-                "Expected 'height' to be a number in 'config', using default.");
-        }
-
-        cJSON *samples_per_pixel =
-            cJSON_GetObjectItemCaseSensitive(config, "samples_per_pixel");
-        if (cJSON_IsNumber(samples_per_pixel)) {
-            state.samples_per_pixel = samples_per_pixel->valueint;
-        } else {
-            log_warn(
-                "Expected 'samples_per_pixel' to be a number in 'config', "
-                "using default.");
-        }
-
-        cJSON *max_depth =
-            cJSON_GetObjectItemCaseSensitive(config, "max_depth");
-        if (cJSON_IsNumber(max_depth)) {
-            state.max_depth = max_depth->valueint;
-        } else {
-            log_warn(
-                "Expected 'max_depth' to be a number in 'config', "
-                "using default.");
-        }
-    } else {
-        log_warn("'config' section not found, using default values.");
-    }
-
-    // Parse camera section (if exists)
     cJSON *cam = cJSON_GetObjectItemCaseSensitive(json, "camera");
     if (cJSON_IsObject(cam)) {
-        cJSON *fov = cJSON_GetObjectItemCaseSensitive(cam, "fov");
-        if (cJSON_IsNumber(fov)) {
-            camera.fov = DEG2RAD(fov->valuedouble);
-        } else {
-            log_warn(
-                "Expected 'fov' to be a number (degrees) in 'camera', using "
-                "default.");
-        }
-        cJSON *defocus_angle =
-            cJSON_GetObjectItemCaseSensitive(cam, "defocus_angle");
-        if (cJSON_IsNumber(defocus_angle)) {
-            camera.defocus_angle = DEG2RAD(defocus_angle->valuedouble);
-        } else {
-            log_warn(
-                "Expected 'defocus_angle' to be a number (degrees) in "
-                "'camera', using default.");
-        }
+        camera.fov =
+            DEG2RAD(parse_float(cJSON_GetObjectItemCaseSensitive(cam, "fov"),
+                                "camera.fov", RAD2DEG(camera.fov)));
+        camera.defocus_angle = DEG2RAD(
+            parse_float(cJSON_GetObjectItemCaseSensitive(cam, "defocus_angle"),
+                        "camera.defocus_angle", 0));
+        camera.focus_dist =
+            parse_float(cJSON_GetObjectItemCaseSensitive(cam, "focus_dist"),
+                        "camera.focus_dist", camera.focus_dist);
 
-        cJSON *focus_dist = cJSON_GetObjectItemCaseSensitive(cam, "focus_dist");
-        if (cJSON_IsNumber(focus_dist)) {
-            camera.focus_dist = focus_dist->valuedouble;
-        } else {
-            log_warn(
-                "Expected 'focus_dist' to be a number in 'camera', using "
-                "default.");
-        }
-
-        cJSON *aspect_ratio =
-            cJSON_GetObjectItemCaseSensitive(cam, "aspect_ratio");
-        if (cJSON_IsString(aspect_ratio)) {
-            const char *s = aspect_ratio->valuestring;
-            int num, den;
-
-            if (sscanf(s, "%d/%d", &num, &den) == 2 && den != 0) {
-                camera.aspect_ratio = (float)num / den;
-            } else {
+        // aspect ratio (fraction format)
+        cJSON *ar = cJSON_GetObjectItemCaseSensitive(cam, "aspect_ratio");
+        if (cJSON_IsString(ar)) {
+            int n, d;
+            if (sscanf(ar->valuestring, "%d/%d", &n, &d) == 2 && d != 0)
+                camera.aspect_ratio = (float)n / d;
+            else
                 log_warn(
-                    "Expected 'aspect_ratio' to be a string (fraction) in "
-                    "'camera', using default.");
-            }
-        } else {
-            log_warn(
-                "Expected 'aspect_ratio' to be a string (fraction) in "
-                "'camera', using default.");
+                    "camera.aspect_ratio: invalid fraction, using default.");
         }
 
-        cJSON *position = cJSON_GetObjectItemCaseSensitive(cam, "position");
-        if (cJSON_IsArray(position) && cJSON_GetArraySize(position) == 3) {
-            camera.position =
-                (V3f){cJSON_GetArrayItem(position, 0)->valuedouble,
-                      cJSON_GetArrayItem(position, 1)->valuedouble,
-                      cJSON_GetArrayItem(position, 2)->valuedouble};
-        } else {
-            log_warn(
-                "Expected 'position' to be an array of 3 numbers in 'camera', "
-                "using default.");
-        }
-
-        cJSON *look_at = cJSON_GetObjectItemCaseSensitive(cam, "look_at");
-        if (cJSON_IsArray(look_at) && cJSON_GetArraySize(look_at) == 3) {
-            camera.look_at = v3f_normalize(
-                (V3f){cJSON_GetArrayItem(look_at, 0)->valuedouble,
-                      cJSON_GetArrayItem(look_at, 1)->valuedouble,
-                      cJSON_GetArrayItem(look_at, 2)->valuedouble});
-        } else {
-            log_warn(
-                "Expected 'look_at' to be an array of 3 numbers in 'camera', "
-                "using default.");
-        }
-
-        cJSON *up = cJSON_GetObjectItemCaseSensitive(cam, "up");
-        if (cJSON_IsArray(up) && cJSON_GetArraySize(up) == 3) {
-            camera.up =
-                v3f_normalize((V3f){cJSON_GetArrayItem(up, 0)->valuedouble,
-                                    cJSON_GetArrayItem(up, 1)->valuedouble,
-                                    cJSON_GetArrayItem(up, 2)->valuedouble});
-        } else {
-            log_warn(
-                "Expected 'up' to be an array of 3 numbers in 'camera', "
-                "using default.");
-        }
-
-    } else {
-        log_warn("'camera' section not found, using default values.");
-    }
-
-    // Parse objects section (spheres and planes)
-    cJSON *objects = cJSON_GetObjectItemCaseSensitive(json, "objects");
-    if (cJSON_IsObject(objects)) {
-        cJSON *sphere_items =
-            cJSON_GetObjectItemCaseSensitive(objects, "sphere");
-        if (cJSON_IsArray(sphere_items) &&
-            cJSON_GetArraySize(sphere_items) > 0) {
-            int total_spheres = cJSON_GetArraySize(sphere_items);
-            Sphere *temp_spheres =
-                malloc(sizeof(Sphere) * total_spheres);  // Temporary allocation
-
-            int valid_spheres = 0;
-            for (int i = 0; i < total_spheres; i++) {
-                cJSON *sphere = cJSON_GetArrayItem(sphere_items, i);
-                cJSON *center =
-                    cJSON_GetObjectItemCaseSensitive(sphere, "center");
-                cJSON *radius =
-                    cJSON_GetObjectItemCaseSensitive(sphere, "radius");
-                cJSON *mat_index =
-                    cJSON_GetObjectItemCaseSensitive(sphere, "material");
-
-                if (cJSON_IsArray(center) && cJSON_IsNumber(mat_index) &&
-                    cJSON_GetArraySize(center) == 3 && cJSON_IsNumber(radius) &&
-                    radius->valuedouble > 0) {
-                    temp_spheres[valid_spheres].mat_index = mat_index->valueint;
-                    temp_spheres[valid_spheres].center =
-                        (V3f){cJSON_GetArrayItem(center, 0)->valuedouble,
-                              cJSON_GetArrayItem(center, 1)->valuedouble,
-                              cJSON_GetArrayItem(center, 2)->valuedouble};
-                    temp_spheres[valid_spheres].radius = radius->valuedouble;
-                    valid_spheres++;
-                } else {
-                    log_warn("Invalid 'sphere' entry, skipping.");
-                }
-            }
-
-            scene.sphere_count = valid_spheres;
-            if (valid_spheres > 0) {
-                scene.spheres =
-                    realloc(temp_spheres, sizeof(Sphere) * valid_spheres);
-            } else {
-                free(temp_spheres);
-                scene.spheres = NULL;
-            }
-        } else {
-            if (sphere_items != NULL)
-                log_warn("'sphere' should be an array in 'objects', skipping.");
-        }
-
-        cJSON *plane_items = cJSON_GetObjectItemCaseSensitive(objects, "plane");
-        if (cJSON_IsArray(plane_items) && cJSON_GetArraySize(plane_items) > 0) {
-            int total_planes = cJSON_GetArraySize(plane_items);
-            Plane *temp_planes =
-                malloc(sizeof(Plane) * total_planes);  // Temporary allocation
-
-            int valid_planes = 0;
-            for (int i = 0; i < total_planes; i++) {
-                cJSON *plane = cJSON_GetArrayItem(plane_items, i);
-                cJSON *normal =
-                    cJSON_GetObjectItemCaseSensitive(plane, "normal");
-                cJSON *point = cJSON_GetObjectItemCaseSensitive(plane, "point");
-                cJSON *mat_index =
-                    cJSON_GetObjectItemCaseSensitive(plane, "material");
-
-                if (cJSON_IsArray(normal) && cJSON_IsArray(point) &&
-                    cJSON_IsNumber(mat_index) &&
-                    cJSON_GetArraySize(normal) == 3 &&
-                    cJSON_GetArraySize(point) == 3) {
-                    temp_planes[valid_planes].mat_index = mat_index->valueint;
-                    temp_planes[valid_planes].normal = v3f_normalize(
-                        (V3f){cJSON_GetArrayItem(normal, 0)->valuedouble,
-                              cJSON_GetArrayItem(normal, 1)->valuedouble,
-                              cJSON_GetArrayItem(normal, 2)->valuedouble});
-                    temp_planes[valid_planes].point =
-                        (V3f){cJSON_GetArrayItem(point, 0)->valuedouble,
-                              cJSON_GetArrayItem(point, 1)->valuedouble,
-                              cJSON_GetArrayItem(point, 2)->valuedouble};
-                    temp_planes[valid_planes].d =
-                        v3f_dot(temp_planes[valid_planes].normal,
-                                temp_planes[valid_planes].point);
-                    valid_planes++;
-                } else {
-                    log_warn("Invalid 'plane' entry, skipping.");
-                }
-            }
-
-            scene.plane_count = valid_planes;
-            if (valid_planes > 0) {
-                scene.planes =
-                    realloc(temp_planes, sizeof(Plane) * valid_planes);
-            } else {
-                free(temp_planes);
-                scene.planes = NULL;
-            }
-        } else {
-            if (plane_items != NULL)
-                log_warn("'plane' should be an array in 'objects', skipping.");
-        }
-
-        cJSON *quad_items = cJSON_GetObjectItemCaseSensitive(objects, "quad");
-        if (cJSON_IsArray(quad_items) && cJSON_GetArraySize(quad_items)) {
-            int total_quads = cJSON_GetArraySize(quad_items);
-            Quad *temp_quads =
-                malloc(sizeof(Quad) * total_quads);  // Temporary allocation
-
-            int valid_quads = 0;
-            for (int i = 0; i < total_quads; i++) {
-                cJSON *quad = cJSON_GetArrayItem(quad_items, i);
-                cJSON *corner =
-                    cJSON_GetObjectItemCaseSensitive(quad, "corner");
-                cJSON *u = cJSON_GetObjectItemCaseSensitive(quad, "u");
-                cJSON *v = cJSON_GetObjectItemCaseSensitive(quad, "v");
-                cJSON *mat_index =
-                    cJSON_GetObjectItemCaseSensitive(quad, "material");
-
-                if (cJSON_IsArray(corner) && cJSON_IsNumber(mat_index) &&
-                    cJSON_GetArraySize(corner) == 3 && cJSON_IsArray(u) &&
-                    cJSON_GetArraySize(u) == 3 && cJSON_IsArray(v) &&
-                    cJSON_GetArraySize(v) == 3) {
-                    temp_quads[valid_quads].mat_index = mat_index->valueint;
-                    temp_quads[valid_quads].corner =
-                        (V3f){cJSON_GetArrayItem(corner, 0)->valuedouble,
-                              cJSON_GetArrayItem(corner, 1)->valuedouble,
-                              cJSON_GetArrayItem(corner, 2)->valuedouble};
-                    temp_quads[valid_quads].u =
-                        (V3f){cJSON_GetArrayItem(u, 0)->valuedouble,
-                              cJSON_GetArrayItem(u, 1)->valuedouble,
-                              cJSON_GetArrayItem(u, 2)->valuedouble};
-                    temp_quads[valid_quads].v =
-                        (V3f){cJSON_GetArrayItem(v, 0)->valuedouble,
-                              cJSON_GetArrayItem(v, 1)->valuedouble,
-                              cJSON_GetArrayItem(v, 2)->valuedouble};
-                    temp_quads[valid_quads].normal = v3f_cross(
-                        temp_quads[valid_quads].u, temp_quads[valid_quads].v);
-                    const V3f nn =
-                        v3f_normalize(temp_quads[valid_quads].normal);
-                    temp_quads[valid_quads].d =
-                        v3f_dot(nn, temp_quads[valid_quads].corner);
-                    temp_quads[valid_quads].w =
-                        v3f_divf(temp_quads[valid_quads].normal,
-                                 v3f_dot(temp_quads[valid_quads].normal,
-                                         temp_quads[valid_quads].normal));
-                    temp_quads[valid_quads].normal = nn;
-                    valid_quads++;
-                } else {
-                    log_warn("Invalid 'quad' entry, skipping.");
-                }
-            }
-
-            scene.quad_count = valid_quads;
-            if (valid_quads > 0) {
-                scene.quads = realloc(temp_quads, sizeof(Quad) * valid_quads);
-            } else {
-                free(temp_quads);
-                scene.quads = NULL;
-            }
-        } else {
-            if (quad_items != NULL)
-                log_warn("'quad' should be an array in 'objects', skipping.");
-        }
-
-    } else {
-        log_warn("'objects' section not found or malformed.");
-    }
+        camera.position =
+            parse_v3f(cJSON_GetObjectItemCaseSensitive(cam, "position"),
+                      "camera.position", camera.position);
+        camera.look_at = v3f_normalize(
+            parse_v3f(cJSON_GetObjectItemCaseSensitive(cam, "look_at"),
+                      "camera.look_at", camera.look_at));
+        camera.up =
+            v3f_normalize(parse_v3f(cJSON_GetObjectItemCaseSensitive(cam, "up"),
+                                    "camera.up", camera.up));
+    } else
+        log_warn("camera: not found, using defaults.");
 
     cJSON *materials = cJSON_GetObjectItemCaseSensitive(json, "materials");
-    if (cJSON_IsArray(materials) && cJSON_GetArraySize(materials)) {
-        int total_mat = cJSON_GetArraySize(materials);
-        Material *temp_materials =
-            malloc(sizeof(Material) * total_mat);  // Temporary allocation
+    if (cJSON_IsArray(materials)) {
+        int N = cJSON_GetArraySize(materials);
+        scene.materials = malloc(sizeof(Material) * N);
 
-        int valid_materials = 0;
-        for (int i = 0; i < total_mat; i++) {
-            cJSON *material = cJSON_GetArrayItem(materials, i);
-            cJSON *type = cJSON_GetObjectItemCaseSensitive(material, "type");
-            cJSON *albedo =
-                cJSON_GetObjectItemCaseSensitive(material, "albedo");
-            cJSON *emission =
-                cJSON_GetObjectItemCaseSensitive(material, "emission");
-
-            if (cJSON_IsString(type)) {
-                MaterialType mat_type = mat_to_string(type->valuestring);
-                temp_materials[valid_materials].type = mat_type;
-                if (mat_type == MAT_LAMBERTIAN && cJSON_IsArray(albedo) &&
-                    cJSON_GetArraySize(albedo) == 3) {
-                    temp_materials[valid_materials]
-                        .properties.lambertian.albedo =
-
-                        (V3f){cJSON_GetArrayItem(albedo, 0)->valuedouble,
-                              cJSON_GetArrayItem(albedo, 1)->valuedouble,
-                              cJSON_GetArrayItem(albedo, 2)->valuedouble};
-                } else if (mat_type == MAT_METAL && cJSON_IsArray(albedo) &&
-                           cJSON_GetArraySize(albedo) == 3) {
-                    cJSON *jfuzz =
-                        cJSON_GetObjectItemCaseSensitive(material, "fuzz");
-                    float fuzz = 0;
-                    if (cJSON_IsNumber(jfuzz)) {
-                        fuzz = jfuzz->valuedouble;
-                        if (fuzz < 0 || fuzz > 1) {
-                            fuzz = clamp_float(fuzz, 0, 1);
-                            log_warn(
-                                "Invalid 'fuzz' entry, must be between 0, 1, "
-                                "using default.");
-                        }
-                    }
-                    temp_materials[valid_materials].properties.metal.albedo =
-
-                        (V3f){cJSON_GetArrayItem(albedo, 0)->valuedouble,
-                              cJSON_GetArrayItem(albedo, 1)->valuedouble,
-                              cJSON_GetArrayItem(albedo, 2)->valuedouble};
-                    temp_materials[valid_materials].properties.metal.fuzz =
-                        fuzz;
-                } else if (mat_type == MAT_EMISSIVE &&
-                           cJSON_IsArray(emission) &&
-                           cJSON_GetArraySize(emission) == 3) {
-                    temp_materials[valid_materials]
-                        .properties.emissive.emission =
-                        (V3f){cJSON_GetArrayItem(emission, 0)->valuedouble,
-                              cJSON_GetArrayItem(emission, 1)->valuedouble,
-                              cJSON_GetArrayItem(emission, 2)->valuedouble};
-                } else if (mat_type == MAT_DIELECTRIC) {
-                    cJSON *jetai_eta = cJSON_GetObjectItemCaseSensitive(
-                        material, "refraction_index");
-                    if (cJSON_IsNumber(jetai_eta)) {
-                        temp_materials[valid_materials]
-                            .properties.dielectric.etai_eta =
-                            jetai_eta->valuedouble;
-                    } else {
-                        log_warn(
-                            "Invalid 'refractive_index' entry using default.");
-                        temp_materials[valid_materials]
-                            .properties.dielectric.etai_eta = 1;
-                    }
-                } else {
-                    log_warn("Unkown 'type', skipping.");
-                }
-                valid_materials++;
-            } else {
-                log_warn("Invalid 'material' entry, skipping.");
+        int M = 0;
+        for (int i = 0; i < N; i++) {
+            cJSON *mt = cJSON_GetArrayItem(materials, i);
+            cJSON *type = cJSON_GetObjectItemCaseSensitive(mt, "type");
+            if (!cJSON_IsString(type)) {
+                log_warn("material: missing/invalid 'type', skipping.");
+                continue;
             }
-        }
 
-        scene.material_count = valid_materials;
-        if (valid_materials > 0) {
-            scene.materials =
-                realloc(temp_materials, sizeof(Material) * valid_materials);
-        } else {
-            free(temp_materials);
-            scene.materials = NULL;
+            Material *dst = &scene.materials[M];
+            dst->type = mat_to_string(type->valuestring);
+
+            cJSON *albedo = cJSON_GetObjectItemCaseSensitive(mt, "albedo");
+            cJSON *emission = cJSON_GetObjectItemCaseSensitive(mt, "emission");
+
+            switch (dst->type) {
+                case MAT_LAMBERTIAN:
+                    dst->properties.lambertian.albedo =
+                        parse_v3f(albedo, "material.albedo", (V3f){1, 1, 1});
+                    break;
+
+                case MAT_METAL: {
+                    dst->properties.metal.albedo =
+                        parse_v3f(albedo, "material.albedo", (V3f){1, 1, 1});
+                    float f = parse_float(
+                        cJSON_GetObjectItemCaseSensitive(mt, "fuzz"),
+                        "material.fuzz", 0);
+                    dst->properties.metal.fuzz = clamp_float(f, 0, 1);
+                } break;
+
+                case MAT_EMISSIVE:
+                    dst->properties.emissive.emission = parse_v3f(
+                        emission, "material.emission", (V3f){0, 0, 0});
+                    break;
+
+                case MAT_DIELECTRIC:
+                    dst->properties.dielectric.etai_eta =
+                        parse_float(cJSON_GetObjectItemCaseSensitive(
+                                        mt, "refraction_index"),
+                                    "material.refraction_index", 1);
+                    break;
+
+                default:
+                    log_warn("material: unknown type, skipping.");
+                    continue;
+            }
+
+            M++;
         }
-    } else {
-        if (materials != NULL)
-            log_warn("'material' should be an array in 'objects', skipping.");
+        scene.material_count = M;
+        scene.materials = realloc(scene.materials, sizeof(Material) * M);
     }
 
+    cJSON *objects = cJSON_GetObjectItemCaseSensitive(json, "objects");
+    if (!cJSON_IsObject(objects)) {
+        log_warn("objects: section missing/malformed.");
+        goto END_PARSE;
+    }
+
+    cJSON *sitems = cJSON_GetObjectItemCaseSensitive(objects, "sphere");
+    if (cJSON_IsArray(sitems)) {
+        int N = cJSON_GetArraySize(sitems);
+        scene.spheres = malloc(sizeof(Sphere) * N);
+        int S = 0;
+
+        for (int i = 0; i < N; i++) {
+            cJSON *s = cJSON_GetArrayItem(sitems, i);
+            int mi =
+                parse_mat_index(cJSON_GetObjectItemCaseSensitive(s, "material"),
+                                scene.material_count, "sphere.material");
+            if (mi < 0) continue;
+
+            cJSON *center = cJSON_GetObjectItemCaseSensitive(s, "center");
+            cJSON *radius = cJSON_GetObjectItemCaseSensitive(s, "radius");
+
+            Sphere *dst = &scene.spheres[S];
+            dst->mat_index = mi;
+            dst->center = parse_v3f(center, "sphere.center", (V3f){0});
+            dst->radius = parse_float(radius, "sphere.radius", 0);
+            if (dst->radius <= 0) {
+                log_warn("sphere.radius: must be >0, skipping.");
+                continue;
+            }
+            S++;
+        }
+
+        scene.sphere_count = S;
+        scene.spheres = realloc(scene.spheres, sizeof(Sphere) * S);
+    }
+
+    cJSON *pitems = cJSON_GetObjectItemCaseSensitive(objects, "plane");
+    if (cJSON_IsArray(pitems)) {
+        int N = cJSON_GetArraySize(pitems);
+        scene.planes = malloc(sizeof(Plane) * N);
+        int P = 0;
+
+        for (int i = 0; i < N; i++) {
+            cJSON *p = cJSON_GetArrayItem(pitems, i);
+            int mi =
+                parse_mat_index(cJSON_GetObjectItemCaseSensitive(p, "material"),
+                                scene.material_count, "plane.material");
+            if (mi < 0) continue;
+
+            Plane *dst = &scene.planes[P];
+            dst->mat_index = mi;
+            dst->normal = v3f_normalize(
+                parse_v3f(cJSON_GetObjectItemCaseSensitive(p, "normal"),
+                          "plane.normal", (V3f){0, 1, 0}));
+            dst->point = parse_v3f(cJSON_GetObjectItemCaseSensitive(p, "point"),
+                                   "plane.point", (V3f){0, 0, 0});
+            dst->d = v3f_dot(dst->normal, dst->point);
+            P++;
+        }
+
+        scene.plane_count = P;
+        scene.planes = realloc(scene.planes, sizeof(Plane) * P);
+    }
+
+    cJSON *qitems = cJSON_GetObjectItemCaseSensitive(objects, "quad");
+    if (cJSON_IsArray(qitems)) {
+        int N = cJSON_GetArraySize(qitems);
+        for (int i = 0; i < N; i++) {
+            parse_quad(&scene, cJSON_GetArrayItem(qitems, i));
+        }
+    }
+
+    cJSON *bitems = cJSON_GetObjectItemCaseSensitive(objects, "boxes");
+    if (cJSON_IsArray(bitems)) {
+        int N = cJSON_GetArraySize(bitems);
+        for (int i = 0; i < N; i++) {
+            cJSON *b = cJSON_GetArrayItem(bitems, i);
+
+            int mi =
+                parse_mat_index(cJSON_GetObjectItemCaseSensitive(b, "material"),
+                                scene.material_count, "box.material");
+
+            if (mi < 0) continue;
+
+            V3f a = parse_v3f(cJSON_GetObjectItemCaseSensitive(b, "a"), "box.a",
+                              (V3f){0});
+            V3f c = parse_v3f(cJSON_GetObjectItemCaseSensitive(b, "b"), "box.b",
+                              (V3f){0});
+
+            add_box(&scene, a, c, mi);
+        }
+    }
+
+END_PARSE:
     cJSON_Delete(json);
 
-    state.image =
-        (uint32_t *)malloc(state.width * state.height * sizeof(*state.image));
-    if (state.image == NULL) {
-        Log(Log_Error, temp_sprintf("load_scene: could not allocate image: %s",
-                                    strerror(errno)));
-        exit(1);
-    }
+    state.image = malloc(state.width * state.height * sizeof(uint32_t));
+    if (!state.image)
+        fatal(temp_sprintf("load_scene: image alloc failed: %s",
+                           strerror(errno)));
+
     scene.camera = camera;
 
-    JSON res = {.scene = scene, .state = state};
-    Log(Log_Info,
-        temp_sprintf("load_scene: Successfully loaded %s", scene_file));
+    Log(Log_Info, temp_sprintf("load_scene: loaded %s", scene_file));
 
-    return res;
+    return (JSON){.scene = scene, .state = state};
 }

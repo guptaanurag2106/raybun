@@ -212,7 +212,7 @@ static inline bool triangle_is_inside(float x1, float y1, float x2, float y2,
 // ----------------------------------------------------------------------------
 //  String Utils
 // ----------------------------------------------------------------------------
-#define UTILS_MAX_TEMP_SIZE 1024
+#define UTILS_MAX_TEMP_SIZE 1024 * 100
 // Will malloc combined, free it yourself
 void combine_charp(const char *str1, const char *str2, char **combined);
 // Will use the utils_static_payload_buffer and reset it everytime
@@ -384,8 +384,8 @@ int calculate_infix(const char *expr) {
     return values[vtop];
 }
 
-static char utils_static_payload_buffer[UTILS_MAX_TEMP_SIZE];
 static char utils_static_temp_buffer[UTILS_MAX_TEMP_SIZE];
+static uint32_t utils_static_temp_buffer_pos = 0;
 
 void combine_charp(const char *str1, const char *str2, char **combined) {
     size_t length = strlen(str1) + strlen(str2) + 1;
@@ -401,34 +401,35 @@ void combine_charp(const char *str1, const char *str2, char **combined) {
 }
 
 char *combine_strings_with_sep_(const char *separator, ...) {
-    va_list args;
-    va_start(args, separator);
-    const char *str = va_arg(args, const char *);
-    int count = 0;
-    while (str != NULL) {
-        str = va_arg(args, const char *);
-        count++;
-    }
-    va_end(args);
-
-    va_start(args, separator);
-    size_t offset = 0;
-    str = va_arg(args, const char *);
-    for (int i = 0; i < count; i++) {
-        size_t len = strlen(str);
-        memcpy(utils_static_payload_buffer + offset, str, len);
-        offset += len;
-        if (i < count - 1) {
-            memcpy(utils_static_payload_buffer + offset, separator,
-                   strlen(separator));
-            offset += strlen(separator);
-        }
-
-        str = va_arg(args, const char *);
-    }
-    va_end(args);
-    utils_static_payload_buffer[offset] = '\0';
-    return utils_static_payload_buffer;
+    // va_list args;
+    // va_start(args, separator);
+    // const char *str = va_arg(args, const char *);
+    // int count = 0;
+    // while (str != NULL) {
+    //     str = va_arg(args, const char *);
+    //     count++;
+    // }
+    // va_end(args);
+    //
+    // va_start(args, separator);
+    // size_t offset = 0;
+    // str = va_arg(args, const char *);
+    // for (int i = 0; i < count; i++) {
+    //     size_t len = strlen(str);
+    //     memcpy(utils_static_temp_buffer + offset, str, len);
+    //     offset += len;
+    //     if (i < count - 1) {
+    //         memcpy(utils_static_temp_buffer + offset, separator,
+    //                strlen(separator));
+    //         offset += strlen(separator);
+    //     }
+    //
+    //     str = va_arg(args, const char *);
+    // }
+    // va_end(args);
+    // utils_static_temp_buffer[offset] = '\0';
+    TODO("not implemented");
+    return utils_static_temp_buffer;
 }
 
 char *temp_sprintf(const char *format, ...) {
@@ -440,18 +441,18 @@ char *temp_sprintf(const char *format, ...) {
         Log(Log_Error, "temp_sprintf: vsnprintf returned neg size");
         return NULL;
     }
-    if (n >= UTILS_MAX_TEMP_SIZE) {
-        Log(Log_Error,
-            "temp_sprintf: vsnprintf returned size greater than "
-            "UTILS_MAX_TEMP_SIZE");
-        return NULL;
+    if (utils_static_temp_buffer_pos + n > UTILS_MAX_TEMP_SIZE) {
+        Log(Log_Info, "temp_sprintf: clearing existing buffer");
+        utils_static_temp_buffer_pos = 0;
     }
 
     va_start(args, format);
-    vsnprintf(utils_static_temp_buffer, UTILS_MAX_TEMP_SIZE, format, args);
+    vsnprintf(utils_static_temp_buffer + utils_static_temp_buffer_pos,
+              UTILS_MAX_TEMP_SIZE, format, args);
     va_end(args);
+    utils_static_temp_buffer_pos += n;
 
-    return utils_static_temp_buffer;
+    return utils_static_temp_buffer + (utils_static_temp_buffer_pos - n);
 }
 
 char *read_entire_file(const char *filename) {

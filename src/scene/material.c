@@ -61,15 +61,6 @@ bool dielectric_scatter(const Material *mat, const HitRecord *rec,
     return true;
 }
 
-bool emissive_scatter(const Material *mat, const HitRecord *rec,
-                      const Ray *ray_in, Colour *attenuation, Ray *ray_out) {
-    return false;
-    // if (mat->type != MAT_EMISSIVE) return false;
-    // *attenuation = mat->properties.emissive.emission;
-    // *ray_out = (Ray){rec->point, v3f_neg(ray_in->direction)};
-    // return true;
-}
-
 bool scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
              Colour *attenuation, Ray *ray_out) {
     if (mat->type == MAT_LAMBERTIAN)
@@ -78,8 +69,7 @@ bool scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
         return metal_scatter(mat, rec, ray_in, attenuation, ray_out);
     if (mat->type == MAT_DIELECTRIC)
         return dielectric_scatter(mat, rec, ray_in, attenuation, ray_out);
-    if (mat->type == MAT_EMISSIVE)
-        return emissive_scatter(mat, rec, ray_in, attenuation, ray_out);
+    if (mat->type == MAT_EMISSIVE) return false;
 
     return false;
 }

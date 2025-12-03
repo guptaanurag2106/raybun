@@ -13,7 +13,7 @@ typedef struct {
 typedef struct {
     V3f normal;
     V3f point;  // any point on the plane
-    float d;  // calculated internally normal.point
+    float d;    // calculated internally normal.point
     int mat_index;
 } Plane;
 
@@ -23,11 +23,15 @@ typedef struct {
     V3f v;
     V3f normal;  // calculate internally
     float d;     // calculate internally (Ax+By=Cz=D)
-    V3f w;     // calculate internally n/(n.n) for normalized n its just n
+    V3f w;       // calculate internally n/(n.n) for normalized n its just n
     int mat_index;
 } Quad;
 
+typedef struct {
+} Triangle;
+
 typedef enum {
+    MAT_NONE,
     MAT_LAMBERTIAN,
     MAT_METAL,
     MAT_DIELECTRIC,
@@ -39,7 +43,7 @@ static inline MaterialType mat_to_string(const char *s) {
     if (strcmp(s, "dielectric") == 0) return MAT_DIELECTRIC;
     if (strcmp(s, "lambertian") == 0) return MAT_LAMBERTIAN;
     if (strcmp(s, "emissive") == 0) return MAT_EMISSIVE;
-    return MAT_LAMBERTIAN;
+    return MAT_NONE;
 }
 
 typedef struct {

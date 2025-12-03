@@ -24,10 +24,12 @@ typedef struct {
     int sphere_count;
     int quad_count;
     int material_count;
+    int triangle_count;
     Plane *planes;
     Sphere *spheres;
     Quad *quads;
     Material *materials;
+    Triangle *triangles;
 
     Camera camera;
 } Scene;

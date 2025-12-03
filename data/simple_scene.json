@@ -1,71 +1,84 @@
 {
   "config": {
-    "width": 1920,
+    "width": 1080,
     "height": 1080,
     "samples_per_pixel": 50,
-    "max_depth": 100
+    "max_depth": 50
   },
   "camera": {
-    "position": [0, 0, 8],
+    "position": [0, 0, 80],
     "look_at": [0, 0, 0],
     "up": [0, 1, 0],
     "fov": 90,
-    "aspect_ratio": "16/9",
-    "defocus_angle": 0.1,
-    "focus_dist": 4.0
+    "aspect_ratio": "1/1",
+    "defocus_angle": 0,
+    "focus_dist": 10.0
   },
 
   "objects": {
     "sphere": [
-      { "center": [-4, 1.2, -6.0], "radius": 1.0, "material": 0 },
-      { "center": [4, 1.5, -8.0], "radius": 1.0, "material": 1 },
-      { "center": [0.0, 0, -5.0], "radius": 2.0, "material": 2 }
+      { "center": [-40, 0, -60], "radius": 10, "material": 0 }
     ],
 
     "plane": [
     ],
     "quad": [
      {
-          "corner": [-6, -6, -4],
-          "u": [0, 12, 0],
-          "v": [0, 0, -12],
-          "material": 2
-        },
-        {
-          "corner": [6, -6, -4],
-          "u": [0, 0, -12],
-          "v": [0, 12, 0],
-          "material": 2
-        },
-        {
-          "corner": [-6, 6, -4],
-          "u": [12, 0, 0],
-          "v": [0, 0, -12],
-          "material": 4
-        },
-        {
-          "corner": [-6, -6, -4],
-          "u": [0, 0, -12],
-          "v": [12, 0, 0],
-          "material": 4
-        },
-        {
-          "corner": [-6, -6, -16],
-          "u": [0, 12, 0],
-          "v": [12, 0, 0],
+          "corner": [-120, -120, -40],
+          "u": [0, 240, 0],
+          "v": [0, 0, -160],
           "material": 5
+        },
+        {
+          "corner": [120, -120, -40],
+          "u": [0, 0, -160],
+          "v": [0, 240, 0],
+          "material": 4
+        },
+        {
+          "corner": [-120, 120, -40],
+          "u": [240, 0, 0],
+          "v": [0, 0, -160],
+          "material": 2
+        },
+        {
+          "corner": [-120, -120, -40],
+          "u": [0, 0, -160],
+          "v": [240, 0, 0],
+          "material": 2
+        },
+        {
+          "corner": [-120, -120, -200],
+          "u": [0, 240, 0],
+          "v": [240, 0, 0],
+          "material": 2
+        },
+        {
+          "corner": [-40, 119, -100],
+          "u": [80, 0, 0],
+          "v": [0, 0, -40],
+          "material": 1
+        }
+    ],
+    "triangle": [
+    ],
+    "boxes": [
+        {
+            "a": [],
+            "b": [],
+            "material": 6
         }
     ]
   },
 
   "materials": [
     { "type": "dielectric", "refraction_index": 1.5 },
-    { "type": "metal", "albedo": [0.9, 0.9, 0.9], "fuzz": 0.05 },
+    { "type": "emissive", "emission": [1, 1, 1] },
     { "type": "lambertian", "albedo": [0.75, 0.75, 0.75] },
     { "type": "lambertian", "albedo": [0.5, 0.5, 0.5] },
-
     { "type": "lambertian", "albedo": [0.8, 0.2, 0.2] },
     { "type": "lambertian", "albedo": [0.2, 0.8, 0.2] },
+    { "type": "metal", "albedo": [0.9, 0.9, 0.9], "fuzz": 0.05 },
     { "type": "lambertian", "albedo": [0.9, 0.9, 0.9] },
     { "type": "lambertian", "albedo": [0.7, 0.7, 0.7] }
   ]
