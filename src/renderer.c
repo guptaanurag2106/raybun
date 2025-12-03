@@ -67,23 +67,23 @@ void render_scene(Scene *scene, State *state) {
 
     Camera cam = scene->camera;
 
-    v3f vu = v3f_mulf(cam.right, cam.viewport_w);
-    v3f vv = v3f_mulf(cam.up, -cam.viewport_h);
+    V3f vu = v3f_mulf(cam.right, cam.viewport_w);
+    V3f vv = v3f_mulf(cam.up, -cam.viewport_h);
 
-    v3f pixel_delta_u = v3f_divf(vu, width);
-    v3f pixel_delta_v = v3f_divf(vv, height);
+    V3f pixel_delta_u = v3f_divf(vu, width);
+    V3f pixel_delta_v = v3f_divf(vv, height);
 
-    v3f viewport_top_left =
+    V3f viewport_top_left =
         v3f_sub(v3f_add(cam.position, v3f_mulf(cam.forward, cam.focus_dist)),
                 v3f_add(v3f_divf(vu, 2), v3f_divf(vv, 2)));
 
-    v3f pixel00_loc =
+    V3f pixel00_loc =
         v3f_add(viewport_top_left,
                 v3f_mulf(v3f_add(pixel_delta_u, pixel_delta_v), 0.5));
 
     float defocus_radius = cam.focus_dist * tanf(cam.defocus_angle / 2);
-    v3f defocus_disk_u = v3f_mulf(cam.right, defocus_radius);
-    v3f defocus_disk_v = v3f_mulf(cam.up, defocus_radius);
+    V3f defocus_disk_u = v3f_mulf(cam.right, defocus_radius);
+    V3f defocus_disk_v = v3f_mulf(cam.up, defocus_radius);
 
     int ray_count = 0;
     struct timeval start, end, diff;
@@ -92,18 +92,18 @@ void render_scene(Scene *scene, State *state) {
 
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
-            Colour colour = (v3f){0, 0, 0};
+            Colour colour = (V3f){0, 0, 0};
 
             for (int s = 0; s < state->samples_per_pixel; s++) {
-                v3f pixel_center = v3f_add(
+                V3f pixel_center = v3f_add(
                     pixel00_loc,
                     v3f_add(v3f_mulf(pixel_delta_u, i + randf() - 0.5),
                             v3f_mulf(pixel_delta_v, j + randf() - 0.5)));
-                v3f ray_origin;
+                V3f ray_origin;
                 if (cam.defocus_angle <= 0) {
                     ray_origin = cam.position;
                 } else {
-                    v3f p = v3f_random_in_unit_disk();
+                    V3f p = v3f_random_in_unit_disk();
                     ray_origin = v3f_add(
                         cam.position, v3f_add(v3f_mulf(defocus_disk_u, p.x),
                                               v3f_mulf(defocus_disk_v, p.y)));

@@ -18,10 +18,13 @@ void print_summary(JSON res) {
         temp_sprintf("load_scene: Loaded %d spheres", res.scene.sphere_count));
     Log(Log_Info,
         temp_sprintf("load_scene: Loaded %d planes", res.scene.plane_count));
+    Log(Log_Info,
+        temp_sprintf("load_scene: Loaded %d quads", res.scene.quad_count));
     Log(Log_Info, temp_sprintf("load_scene: Loaded %d materials",
                                res.scene.material_count));
 }
 
+// TODO: check what all actually needs to be normalized
 JSON load_scene(const char *scene_file) {
     const char *file = read_entire_file(scene_file);
     if (file == NULL) {
@@ -44,6 +47,8 @@ JSON load_scene(const char *scene_file) {
                    .planes = NULL,
                    .sphere_count = 0,
                    .spheres = NULL,
+                   .quad_count = 0,
+                   .quads = 0,
                    .material_count = 0,
                    .materials = NULL};
     State state = {
@@ -150,7 +155,7 @@ JSON load_scene(const char *scene_file) {
         cJSON *position = cJSON_GetObjectItemCaseSensitive(cam, "position");
         if (cJSON_IsArray(position) && cJSON_GetArraySize(position) == 3) {
             camera.position =
-                (v3f){cJSON_GetArrayItem(position, 0)->valuedouble,
+                (V3f){cJSON_GetArrayItem(position, 0)->valuedouble,
                       cJSON_GetArrayItem(position, 1)->valuedouble,
                       cJSON_GetArrayItem(position, 2)->valuedouble};
         } else {
@@ -161,9 +166,10 @@ JSON load_scene(const char *scene_file) {
 
         cJSON *look_at = cJSON_GetObjectItemCaseSensitive(cam, "look_at");
         if (cJSON_IsArray(look_at) && cJSON_GetArraySize(look_at) == 3) {
-            camera.look_at = (v3f){cJSON_GetArrayItem(look_at, 0)->valuedouble,
-                                   cJSON_GetArrayItem(look_at, 1)->valuedouble,
-                                   cJSON_GetArrayItem(look_at, 2)->valuedouble};
+            camera.look_at = v3f_normalize(
+                (V3f){cJSON_GetArrayItem(look_at, 0)->valuedouble,
+                      cJSON_GetArrayItem(look_at, 1)->valuedouble,
+                      cJSON_GetArrayItem(look_at, 2)->valuedouble});
         } else {
             log_warn(
                 "Expected 'look_at' to be an array of 3 numbers in 'camera', "
@@ -172,9 +178,10 @@ JSON load_scene(const char *scene_file) {
 
         cJSON *up = cJSON_GetObjectItemCaseSensitive(cam, "up");
         if (cJSON_IsArray(up) && cJSON_GetArraySize(up) == 3) {
-            camera.up = (v3f){cJSON_GetArrayItem(up, 0)->valuedouble,
-                              cJSON_GetArrayItem(up, 1)->valuedouble,
-                              cJSON_GetArrayItem(up, 2)->valuedouble};
+            camera.up =
+                v3f_normalize((V3f){cJSON_GetArrayItem(up, 0)->valuedouble,
+                                    cJSON_GetArrayItem(up, 1)->valuedouble,
+                                    cJSON_GetArrayItem(up, 2)->valuedouble});
         } else {
             log_warn(
                 "Expected 'up' to be an array of 3 numbers in 'camera', "
@@ -190,7 +197,8 @@ JSON load_scene(const char *scene_file) {
     if (cJSON_IsObject(objects)) {
         cJSON *sphere_items =
             cJSON_GetObjectItemCaseSensitive(objects, "sphere");
-        if (cJSON_IsArray(sphere_items)) {
+        if (cJSON_IsArray(sphere_items) &&
+            cJSON_GetArraySize(sphere_items) > 0) {
             int total_spheres = cJSON_GetArraySize(sphere_items);
             Sphere *temp_spheres =
                 malloc(sizeof(Sphere) * total_spheres);  // Temporary allocation
@@ -210,7 +218,7 @@ JSON load_scene(const char *scene_file) {
                     radius->valuedouble > 0) {
                     temp_spheres[valid_spheres].mat_index = mat_index->valueint;
                     temp_spheres[valid_spheres].center =
-                        (v3f){cJSON_GetArrayItem(center, 0)->valuedouble,
+                        (V3f){cJSON_GetArrayItem(center, 0)->valuedouble,
                               cJSON_GetArrayItem(center, 1)->valuedouble,
                               cJSON_GetArrayItem(center, 2)->valuedouble};
                     temp_spheres[valid_spheres].radius = radius->valuedouble;
@@ -234,7 +242,7 @@ JSON load_scene(const char *scene_file) {
         }
 
         cJSON *plane_items = cJSON_GetObjectItemCaseSensitive(objects, "plane");
-        if (cJSON_IsArray(plane_items)) {
+        if (cJSON_IsArray(plane_items) && cJSON_GetArraySize(plane_items) > 0) {
             int total_planes = cJSON_GetArraySize(plane_items);
             Plane *temp_planes =
                 malloc(sizeof(Plane) * total_planes);  // Temporary allocation
@@ -254,13 +262,16 @@ JSON load_scene(const char *scene_file) {
                     cJSON_GetArraySize(point) == 3) {
                     temp_planes[valid_planes].mat_index = mat_index->valueint;
                     temp_planes[valid_planes].normal = v3f_normalize(
-                        (v3f){cJSON_GetArrayItem(normal, 0)->valuedouble,
+                        (V3f){cJSON_GetArrayItem(normal, 0)->valuedouble,
                               cJSON_GetArrayItem(normal, 1)->valuedouble,
                               cJSON_GetArrayItem(normal, 2)->valuedouble});
                     temp_planes[valid_planes].point =
-                        (v3f){cJSON_GetArrayItem(point, 0)->valuedouble,
+                        (V3f){cJSON_GetArrayItem(point, 0)->valuedouble,
                               cJSON_GetArrayItem(point, 1)->valuedouble,
                               cJSON_GetArrayItem(point, 2)->valuedouble};
+                    temp_planes[valid_planes].d =
+                        v3f_dot(temp_planes[valid_planes].normal,
+                                temp_planes[valid_planes].point);
                     valid_planes++;
                 } else {
                     log_warn("Invalid 'plane' entry, skipping.");
@@ -276,15 +287,78 @@ JSON load_scene(const char *scene_file) {
                 scene.planes = NULL;
             }
         } else {
-            if (sphere_items != NULL)
+            if (plane_items != NULL)
                 log_warn("'plane' should be an array in 'objects', skipping.");
         }
+
+        cJSON *quad_items = cJSON_GetObjectItemCaseSensitive(objects, "quad");
+        if (cJSON_IsArray(quad_items) && cJSON_GetArraySize(quad_items)) {
+            int total_quads = cJSON_GetArraySize(quad_items);
+            Quad *temp_quads =
+                malloc(sizeof(Quad) * total_quads);  // Temporary allocation
+
+            int valid_quads = 0;
+            for (int i = 0; i < total_quads; i++) {
+                cJSON *quad = cJSON_GetArrayItem(quad_items, i);
+                cJSON *corner =
+                    cJSON_GetObjectItemCaseSensitive(quad, "corner");
+                cJSON *u = cJSON_GetObjectItemCaseSensitive(quad, "u");
+                cJSON *v = cJSON_GetObjectItemCaseSensitive(quad, "v");
+                cJSON *mat_index =
+                    cJSON_GetObjectItemCaseSensitive(quad, "material");
+
+                if (cJSON_IsArray(corner) && cJSON_IsNumber(mat_index) &&
+                    cJSON_GetArraySize(corner) == 3 && cJSON_IsArray(u) &&
+                    cJSON_GetArraySize(u) == 3 && cJSON_IsArray(v) &&
+                    cJSON_GetArraySize(v) == 3) {
+                    temp_quads[valid_quads].mat_index = mat_index->valueint;
+                    temp_quads[valid_quads].corner =
+                        (V3f){cJSON_GetArrayItem(corner, 0)->valuedouble,
+                              cJSON_GetArrayItem(corner, 1)->valuedouble,
+                              cJSON_GetArrayItem(corner, 2)->valuedouble};
+                    temp_quads[valid_quads].u =
+                        (V3f){cJSON_GetArrayItem(u, 0)->valuedouble,
+                              cJSON_GetArrayItem(u, 1)->valuedouble,
+                              cJSON_GetArrayItem(u, 2)->valuedouble};
+                    temp_quads[valid_quads].v =
+                        (V3f){cJSON_GetArrayItem(v, 0)->valuedouble,
+                              cJSON_GetArrayItem(v, 1)->valuedouble,
+                              cJSON_GetArrayItem(v, 2)->valuedouble};
+                    temp_quads[valid_quads].normal = v3f_cross(
+                        temp_quads[valid_quads].u, temp_quads[valid_quads].v);
+                    const V3f nn =
+                        v3f_normalize(temp_quads[valid_quads].normal);
+                    temp_quads[valid_quads].d =
+                        v3f_dot(nn, temp_quads[valid_quads].corner);
+                    temp_quads[valid_quads].w =
+                        v3f_divf(temp_quads[valid_quads].normal,
+                                 v3f_dot(temp_quads[valid_quads].normal,
+                                         temp_quads[valid_quads].normal));
+                    temp_quads[valid_quads].normal = nn;
+                    valid_quads++;
+                } else {
+                    log_warn("Invalid 'quad' entry, skipping.");
+                }
+            }
+
+            scene.quad_count = valid_quads;
+            if (valid_quads > 0) {
+                scene.quads = realloc(temp_quads, sizeof(Quad) * valid_quads);
+            } else {
+                free(temp_quads);
+                scene.quads = NULL;
+            }
+        } else {
+            if (quad_items != NULL)
+                log_warn("'quad' should be an array in 'objects', skipping.");
+        }
+
     } else {
         log_warn("'objects' section not found or malformed.");
     }
 
     cJSON *materials = cJSON_GetObjectItemCaseSensitive(json, "materials");
-    if (cJSON_IsArray(materials)) {
+    if (cJSON_IsArray(materials) && cJSON_GetArraySize(materials)) {
         int total_mat = cJSON_GetArraySize(materials);
         Material *temp_materials =
             malloc(sizeof(Material) * total_mat);  // Temporary allocation
@@ -295,6 +369,8 @@ JSON load_scene(const char *scene_file) {
             cJSON *type = cJSON_GetObjectItemCaseSensitive(material, "type");
             cJSON *albedo =
                 cJSON_GetObjectItemCaseSensitive(material, "albedo");
+            cJSON *emission =
+                cJSON_GetObjectItemCaseSensitive(material, "emission");
 
             if (cJSON_IsString(type)) {
                 MaterialType mat_type = mat_to_string(type->valuestring);
@@ -304,7 +380,7 @@ JSON load_scene(const char *scene_file) {
                     temp_materials[valid_materials]
                         .properties.lambertian.albedo =
 
-                        (v3f){cJSON_GetArrayItem(albedo, 0)->valuedouble,
+                        (V3f){cJSON_GetArrayItem(albedo, 0)->valuedouble,
                               cJSON_GetArrayItem(albedo, 1)->valuedouble,
                               cJSON_GetArrayItem(albedo, 2)->valuedouble};
                 } else if (mat_type == MAT_METAL && cJSON_IsArray(albedo) &&
@@ -323,11 +399,19 @@ JSON load_scene(const char *scene_file) {
                     }
                     temp_materials[valid_materials].properties.metal.albedo =
 
-                        (v3f){cJSON_GetArrayItem(albedo, 0)->valuedouble,
+                        (V3f){cJSON_GetArrayItem(albedo, 0)->valuedouble,
                               cJSON_GetArrayItem(albedo, 1)->valuedouble,
                               cJSON_GetArrayItem(albedo, 2)->valuedouble};
                     temp_materials[valid_materials].properties.metal.fuzz =
                         fuzz;
+                } else if (mat_type == MAT_EMISSIVE &&
+                           cJSON_IsArray(emission) &&
+                           cJSON_GetArraySize(emission) == 3) {
+                    temp_materials[valid_materials]
+                        .properties.emissive.emission =
+                        (V3f){cJSON_GetArrayItem(emission, 0)->valuedouble,
+                              cJSON_GetArrayItem(emission, 1)->valuedouble,
+                              cJSON_GetArrayItem(emission, 2)->valuedouble};
                 } else if (mat_type == MAT_DIELECTRIC) {
                     cJSON *jetai_eta = cJSON_GetObjectItemCaseSensitive(
                         material, "refraction_index");

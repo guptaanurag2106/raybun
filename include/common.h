@@ -1,25 +1,44 @@
 #pragma once
 
 #include "vec.h"
-typedef v3f Colour;
+
+typedef V3f Colour;
+
 typedef struct {
-    v3f center;
+    V3f center;
     float radius;
     int mat_index;
 } Sphere;
 
 typedef struct {
-    v3f normal;
-    v3f point;  // any point on the plane
+    V3f normal;
+    V3f point;  // any point on the plane
+    float d;  // calculated internally normal.point
     int mat_index;
 } Plane;
 
-typedef enum { MAT_LAMBERTIAN, MAT_METAL, MAT_DIELECTRIC } MaterialType;
+typedef struct {
+    V3f corner;
+    V3f u;
+    V3f v;
+    V3f normal;  // calculate internally
+    float d;     // calculate internally (Ax+By=Cz=D)
+    V3f w;     // calculate internally n/(n.n) for normalized n its just n
+    int mat_index;
+} Quad;
+
+typedef enum {
+    MAT_LAMBERTIAN,
+    MAT_METAL,
+    MAT_DIELECTRIC,
+    MAT_EMISSIVE
+} MaterialType;
 
 static inline MaterialType mat_to_string(const char *s) {
     if (strcmp(s, "metal") == 0) return MAT_METAL;
     if (strcmp(s, "dielectric") == 0) return MAT_DIELECTRIC;
     if (strcmp(s, "lambertian") == 0) return MAT_LAMBERTIAN;
+    if (strcmp(s, "emissive") == 0) return MAT_EMISSIVE;
     return MAT_LAMBERTIAN;
 }
 
@@ -39,18 +58,21 @@ typedef struct {
             float etai_eta;
         } dielectric;
 
+        struct {
+            Colour emission;
+        } emissive;
+
     } properties;
-    const char *name;
 } Material;
 
 typedef struct {
-    v3f origin;
-    v3f direction;
+    V3f origin;
+    V3f direction;
 } Ray;
 
 typedef struct {
-    v3f point;
-    v3f normal;
+    V3f point;
+    V3f normal;
     float t;
     bool front_face;
     int mat_index;

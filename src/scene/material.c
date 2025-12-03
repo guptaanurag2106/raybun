@@ -2,7 +2,6 @@
 
 #include "common.h"
 #include "rinternal.h"
-#include "scene.h"
 #include "vec.h"
 
 // always scatter, attenuate, though with prob (1-reflectance R) we can just
@@ -11,7 +10,7 @@ bool lambertian_scatter(const Material *mat, const HitRecord *rec,
                         const Ray *ray_in, Colour *attenuation, Ray *ray_out) {
     if (mat->type != MAT_LAMBERTIAN) return false;
 
-    v3f scatter_dir = v3f_add(rec->normal, v3f_random_unit());
+    V3f scatter_dir = v3f_add(rec->normal, v3f_random_unit());
     if (v3f_near_zero(scatter_dir)) {
         scatter_dir = rec->normal;
     }
@@ -24,7 +23,7 @@ bool metal_scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
                    Colour *attenuation, Ray *ray_out) {
     if (mat->type != MAT_METAL) return false;
 
-    v3f reflected_dir = v3f_reflect(ray_in->direction, rec->normal);
+    V3f reflected_dir = v3f_reflect(ray_in->direction, rec->normal);
     reflected_dir =
         v3f_add(v3f_normalize(reflected_dir),
                 v3f_mulf(v3f_random_unit(), mat->properties.metal.fuzz));
@@ -47,12 +46,12 @@ bool dielectric_scatter(const Material *mat, const HitRecord *rec,
     float ri = rec->front_face ? (1.0 / mat->properties.dielectric.etai_eta)
                                : mat->properties.dielectric.etai_eta;
 
-    v3f norm_direction = v3f_normalize(ray_in->direction);
+    V3f norm_direction = v3f_normalize(ray_in->direction);
     float cost = fmin(-1 * v3f_dot(norm_direction, rec->normal), 1.0);
     float sint = sqrtf(1.0 - cost * cost);
 
     bool can_refract = ri * sint <= 1.0;
-    v3f direction;
+    V3f direction;
     if (can_refract && reflectance(cost, ri) < randf()) {
         direction = v3f_refract(norm_direction, rec->normal, ri);
     } else {
@@ -60,6 +59,15 @@ bool dielectric_scatter(const Material *mat, const HitRecord *rec,
     }
     *ray_out = (Ray){rec->point, direction};
     return true;
+}
+
+bool emissive_scatter(const Material *mat, const HitRecord *rec,
+                      const Ray *ray_in, Colour *attenuation, Ray *ray_out) {
+    return false;
+    // if (mat->type != MAT_EMISSIVE) return false;
+    // *attenuation = mat->properties.emissive.emission;
+    // *ray_out = (Ray){rec->point, v3f_neg(ray_in->direction)};
+    // return true;
 }
 
 bool scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
@@ -70,6 +78,8 @@ bool scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
         return metal_scatter(mat, rec, ray_in, attenuation, ray_out);
     if (mat->type == MAT_DIELECTRIC)
         return dielectric_scatter(mat, rec, ray_in, attenuation, ray_out);
+    if (mat->type == MAT_EMISSIVE)
+        return emissive_scatter(mat, rec, ray_in, attenuation, ray_out);
 
     return false;
 }
