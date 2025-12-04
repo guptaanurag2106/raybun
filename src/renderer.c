@@ -10,8 +10,7 @@
 #include "utils.h"
 #include "vec.h"
 
-//FIX: why does background colour matter in cornell box? when it is covered from all sides
-const Colour BACKGROUND = {0.1,0.1,0.1};
+const Colour BACKGROUND = {0.1, 0.1, 0.1};
 
 // argb
 uint32_t pack_colour(Colour colour) {
@@ -121,9 +120,9 @@ void render_scene(Scene *scene, State *state) {
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
 
-    double seconds = diff.tv_sec + diff.tv_usec * 1e-6;
-    double time_per_ray = seconds / ray_count;
+    double ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
+    double time_per_ray = ms / ray_count;
 
-    Log(Log_Info, temp_sprintf("Rendered %d rays in %lds or %fs/ray", ray_count,
-                               (long int)diff.tv_sec, time_per_ray));
+    Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray", ray_count,
+                               (long int)ms, time_per_ray));
 }

@@ -52,7 +52,6 @@ bool plane_hit(const Plane *plane, const Ray *ray, float tmin, float tmax,
     return true;
 }
 
-// TODO: quads only face 1 way?
 bool quad_hit(const Quad *quad, const Ray *ray, float tmin, float tmax,
               HitRecord *record) {
     const float nd = v3f_dot(quad->normal, ray->direction);

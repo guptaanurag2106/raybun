@@ -47,7 +47,7 @@ bool dielectric_scatter(const Material *mat, const HitRecord *rec,
                                : mat->properties.dielectric.etai_eta;
 
     V3f norm_direction = v3f_normalize(ray_in->direction);
-    float cost = fmin(-1 * v3f_dot(norm_direction, rec->normal), 1.0);
+    float cost = MIN(-1 * v3f_dot(norm_direction, rec->normal), 1.0);
     float sint = sqrtf(1.0 - cost * cost);
 
     bool can_refract = ri * sint <= 1.0;

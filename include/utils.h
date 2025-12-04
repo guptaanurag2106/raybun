@@ -55,12 +55,11 @@ static inline int Log_set_out_file(const char *out_file) {
 }
 
 void Log(enum Log_Level level, const char *message);
+
 // ----------------------------------------------------------------------------
 //  General Utils
 // ----------------------------------------------------------------------------
-#ifndef DEBUG
-#define ASSERT(x) ((void)0)
-#else
+#ifdef DEBUG
 #define ASSERT(x)                                                           \
     do {                                                                    \
         if (!(x)) {                                                         \
@@ -69,6 +68,8 @@ void Log(enum Log_Level level, const char *message);
             abort();                                                        \
         }                                                                   \
     } while (0)
+#else
+#define ASSERT(x) ((void)0)
 #endif
 
 #define MAX(a, b)               \
@@ -118,6 +119,7 @@ static inline char *shift(int *argc, char ***argv) {
 }
 
 char *generate_uuid();
+
 static inline void timersub(const struct timeval *a, const struct timeval *b,
                             struct timeval *result) {
     result->tv_sec = a->tv_sec - b->tv_sec;
@@ -187,8 +189,12 @@ WRAP_TYPE(double)
 
 static inline float randf() { return rand() / (RAND_MAX + 1.0); }
 
-static inline float rand_range(float min, float max) {
+static inline float randf_range(float min, float max) {
     return min + (max - min) * randf();
+}
+
+static inline int randi_range(int min, int max) {
+    return (int)randf_range(min, max + 1);
 }
 
 int calculate_infix(const char *expr);  // 34+5*10+3 -> 88 just +-*/%

@@ -81,8 +81,8 @@ VECDEF V3f v3f_clamp(V3f a, float min, float max) {
 VECDEF V3f v3f_random() { return (V3f){randf(), randf(), randf()}; }
 
 VECDEF V3f v3f_random_range(float min, float max) {
-    return (V3f){rand_range(min, max), rand_range(min, max),
-                 rand_range(min, max)};
+    return (V3f){randf_range(min, max), randf_range(min, max),
+                 randf_range(min, max)};
 }
 
 VECDEF V3f
@@ -98,7 +98,7 @@ v3f_random_unit() {  // TODO: find better way for random vector on sphere
 
 VECDEF V3f v3f_random_in_unit_disk() {
     while (true) {
-        V3f p = (V3f){rand_range(-1, 1), rand_range(-1, 1), 0};
+        V3f p = (V3f){randf_range(-1, 1), randf_range(-1, 1), 0};
         if (v3f_slength(p) < 1) return p;
     }
 }
