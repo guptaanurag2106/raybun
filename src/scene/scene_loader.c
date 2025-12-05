@@ -1,10 +1,8 @@
 #include <cJSON.h>
-#include <math.h>
 #include <stdlib.h>
-#include <string.h>
 
-#include "aabb.h"
 #include "common.h"
+#include "rinternal.h"
 #include "scene.h"
 #include "utils.h"
 #include "vec.h"
@@ -18,26 +16,25 @@ void log_warn(const char *msg) {
     Log(Log_Warn, temp_sprintf("load_scene: %s", msg));
 }
 
-void print_summary(JSON res) {
+void print_summary(const Scene *scene, const State *state) {
     Log(Log_Info, temp_sprintf("load_scene: Creating image of size %d x %d",
-                               res.state.width, res.state.height));
+                               state->width, state->height));
     Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d spheres", res.scene.sphere_count));
+        temp_sprintf("load_scene: Loaded %d spheres %d", scene->sphere_count));
     Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d planes", res.scene.plane_count));
+        temp_sprintf("load_scene: Loaded %d planes", scene->plane_count));
     Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d quads", res.scene.quad_count));
-    Log(Log_Info, temp_sprintf("load_scene: Loaded %d triangles",
-                               res.scene.triangle_count));
-    Log(Log_Info, temp_sprintf("load_scene: Loaded %d materials",
-                               res.scene.material_count));
+        temp_sprintf("load_scene: Loaded %d triangles", scene->triangle_count));
+    Log(Log_Info,
+        temp_sprintf("load_scene: Loaded %d quads", scene->quad_count));
+    Log(Log_Info,
+        temp_sprintf("load_scene: Loaded %d materials", scene->material_count));
 }
 
 // TODO: check what all actually needs to be normalized
 static V3f parse_v3f(cJSON *arr, const char *ctx, V3f fallback) {
     if (!cJSON_IsArray(arr) || cJSON_GetArraySize(arr) != 3) {
         log_warn(temp_sprintf("%s: expected array[3], using default.", ctx));
-        printf("asdf: %s  %d", ctx, cJSON_GetArraySize(arr));
         return fallback;
     }
     return (V3f){cJSON_GetArrayItem(arr, 0)->valuedouble,
@@ -84,7 +81,6 @@ static Quad make_quad(V3f corner, V3f u, V3f v, int mat_index) {
     q.normal = nn;
     q.d = v3f_dot(nn, corner);
     q.w = v3f_mulf(n, 1.0f / L);
-    q.aabb = aabb(q.corner, v3f_add(q.corner, v3f_add(q.u, q.v)));
     return q;
 }
 
@@ -100,16 +96,64 @@ static Triangle make_triangle(V3f p1, V3f p2, V3f p3, int mat_index) {
                       .mat_index = mat_index};
 }
 
-static void append_quad(Scene *scene, Quad quad) {
-    scene->quads =
-        realloc(scene->quads, sizeof(Quad) * (scene->quad_count + 1));
-    scene->quads[scene->quad_count++] = quad;
+typedef struct {
+    Hittable *hs;
+    int count;
+    int capacity;
+} HittableVector;
+
+static HittableVector hv = {0};
+void ensure_hv_capacity(int need) {
+    if (hv.capacity >= need) return;
+
+    int new_cap = hv.capacity ? hv.capacity * 2 : 16;
+    while (new_cap < need) new_cap *= 2;
+
+    hv.hs = realloc(hv.hs, new_cap * sizeof(Hittable));
+    if (hv.hs == NULL) fatal("load_scene: hv realloc failed");
+    hv.capacity = new_cap;
+}
+
+static void append_hittable(Hittable h) {
+    ensure_hv_capacity(hv.count + 1);
+    hv.hs[hv.count++] = h;
+}
+
+static void append_sphere(Scene *scene, Sphere sphere) {
+    scene->sphere_count++;
+    Sphere *sphere_data = malloc(sizeof(Sphere));
+    *sphere_data = sphere;
+
+    Hittable h = make_hittable_sphere(sphere_data);
+    h.type = HITTABLE_SPHERE;
+    append_hittable(h);
+}
+
+static void append_plane(Scene *scene, Plane plane) {
+    scene->plane_count++;
+    Plane *plane_data = malloc(sizeof(Plane));
+    *plane_data = plane;
+    Hittable h = make_hittable_plane(plane_data);
+    h.type = HITTABLE_PLANE;
+    append_hittable(h);
 }
 
 static void append_triangle(Scene *scene, Triangle triangle) {
-    scene->triangles = realloc(scene->triangles,
-                               sizeof(Triangle) * (scene->triangle_count + 1));
-    scene->triangles[scene->triangle_count++] = triangle;
+    scene->triangle_count++;
+    Triangle *triangle_data = malloc(sizeof(Triangle));
+    *triangle_data = triangle;
+    Hittable h = make_hittable_triangle(triangle_data);
+    h.type = HITTABLE_TRIANGLE;
+    append_hittable(h);
+}
+
+static void append_quad(Scene *scene, Quad quad) {
+    scene->quad_count++;
+    Quad *quad_data = malloc(sizeof(Quad));
+    *quad_data = quad;
+    Hittable h = make_hittable_quad(quad_data);
+    h.type = HITTABLE_QUAD;
+    append_hittable(h);
 }
 
 static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
@@ -180,7 +224,7 @@ static int parse_triangle(Scene *scene, cJSON *tnode) {
     return 1;
 }
 
-JSON load_scene(const char *scene_file) {
+void load_scene(const char *scene_file, Scene *scene, State *state) {
     const char *file = read_entire_file(scene_file);
     if (!file) fatal("load_scene: cannot read file.");
 
@@ -193,9 +237,6 @@ JSON load_scene(const char *scene_file) {
             cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() : "unknown"));
     }
 
-    Scene scene = {0};
-    State state = {
-        .width = 1024, .height = 768, .samples_per_pixel = 10, .max_depth = 10};
     Camera camera = {.position = {0, 0, -5},
                      .look_at = {0, 0, 0},
                      .up = {0, 1, 0},
@@ -206,18 +247,18 @@ JSON load_scene(const char *scene_file) {
 
     cJSON *config = cJSON_GetObjectItemCaseSensitive(json, "config");
     if (cJSON_IsObject(config)) {
-        state.width =
+        state->width =
             parse_int(cJSON_GetObjectItemCaseSensitive(config, "width"),
-                      "config.width", state.width);
-        state.height =
+                      "config.width", state->width);
+        state->height =
             parse_int(cJSON_GetObjectItemCaseSensitive(config, "height"),
-                      "config.height", state.height);
-        state.samples_per_pixel = parse_int(
+                      "config.height", state->height);
+        state->samples_per_pixel = parse_int(
             cJSON_GetObjectItemCaseSensitive(config, "samples_per_pixel"),
-            "config.spp", state.samples_per_pixel);
-        state.max_depth =
+            "config.spp", state->samples_per_pixel);
+        state->max_depth =
             parse_int(cJSON_GetObjectItemCaseSensitive(config, "max_depth"),
-                      "config.max_depth", state.max_depth);
+                      "config.max_depth", state->max_depth);
     } else
         log_warn("config: not found, using defaults.");
 
@@ -259,7 +300,7 @@ JSON load_scene(const char *scene_file) {
     cJSON *materials = cJSON_GetObjectItemCaseSensitive(json, "materials");
     if (cJSON_IsArray(materials)) {
         int N = cJSON_GetArraySize(materials);
-        scene.materials = malloc(sizeof(Material) * N);
+        scene->materials = malloc(sizeof(Material) * N);
 
         int M = 0;
         for (int i = 0; i < N; i++) {
@@ -270,7 +311,7 @@ JSON load_scene(const char *scene_file) {
                 continue;
             }
 
-            Material *dst = &scene.materials[M];
+            Material *dst = &scene->materials[M];
             dst->type = mat_to_string(type->valuestring);
 
             cJSON *albedo = cJSON_GetObjectItemCaseSensitive(mt, "albedo");
@@ -310,8 +351,8 @@ JSON load_scene(const char *scene_file) {
 
             M++;
         }
-        scene.material_count = M;
-        scene.materials = realloc(scene.materials, sizeof(Material) * M);
+        scene->material_count = M;
+        scene->materials = realloc(scene->materials, sizeof(Material) * M);
     }
 
     cJSON *objects = cJSON_GetObjectItemCaseSensitive(json, "objects");
@@ -323,76 +364,52 @@ JSON load_scene(const char *scene_file) {
     cJSON *sitems = cJSON_GetObjectItemCaseSensitive(objects, "sphere");
     if (cJSON_IsArray(sitems)) {
         int N = cJSON_GetArraySize(sitems);
-        scene.spheres = malloc(sizeof(Sphere) * N);
-        int S = 0;
 
         for (int i = 0; i < N; i++) {
             cJSON *s = cJSON_GetArrayItem(sitems, i);
             int mi =
                 parse_mat_index(cJSON_GetObjectItemCaseSensitive(s, "material"),
-                                scene.material_count, "sphere.material");
+                                scene->material_count, "sphere.material");
             if (mi < 0) continue;
 
             cJSON *center = cJSON_GetObjectItemCaseSensitive(s, "center");
             cJSON *radius = cJSON_GetObjectItemCaseSensitive(s, "radius");
 
-            Sphere *dst = &scene.spheres[S];
-            dst->mat_index = mi;
-            dst->center = parse_v3f(center, "sphere.center", (V3f){0});
-            const float r = parse_float(radius, "sphere.radius", 0);
-            dst->radius = r;
-            dst->aabb = (AABB){
-                .xmin = dst->center.x - r,
-                .xmax = dst->center.x + r,
-                .ymin = dst->center.y - r,
-                .ymax = dst->center.y + r,
-                .zmin = dst->center.z - r,
-                .zmax = dst->center.z + r,
-            };
-            if (dst->radius <= 0) {
+            Sphere sphere = {0};
+            sphere.mat_index = mi;
+            sphere.center = parse_v3f(center, "sphere.center", (V3f){0});
+            sphere.radius = parse_float(radius, "sphere.radius", 0);
+            if (sphere.radius <= 0) {
                 log_warn("sphere.radius: must be >0, skipping.");
                 continue;
             }
-            S++;
-        }
 
-        scene.sphere_count = S;
-        scene.spheres = realloc(scene.spheres, sizeof(Sphere) * S);
+            append_sphere(scene, sphere);
+        }
     }
 
     cJSON *pitems = cJSON_GetObjectItemCaseSensitive(objects, "plane");
     if (cJSON_IsArray(pitems)) {
         int N = cJSON_GetArraySize(pitems);
-        scene.planes = malloc(sizeof(Plane) * N);
-        int P = 0;
 
         for (int i = 0; i < N; i++) {
             cJSON *p = cJSON_GetArrayItem(pitems, i);
             int mi =
                 parse_mat_index(cJSON_GetObjectItemCaseSensitive(p, "material"),
-                                scene.material_count, "plane.material");
+                                scene->material_count, "plane.material");
             if (mi < 0) continue;
 
-            Plane *dst = &scene.planes[P];
-            dst->mat_index = mi;
-            dst->normal = v3f_normalize(
+            Plane plane = {0};
+            plane.mat_index = mi;
+            plane.normal = v3f_normalize(
                 parse_v3f(cJSON_GetObjectItemCaseSensitive(p, "normal"),
                           "plane.normal", (V3f){0, 1, 0}));
-            dst->point = parse_v3f(cJSON_GetObjectItemCaseSensitive(p, "point"),
-                                   "plane.point", (V3f){0, 0, 0});
-            dst->d = v3f_dot(dst->normal, dst->point);
-            P++;
-        }
+            plane.point =
+                parse_v3f(cJSON_GetObjectItemCaseSensitive(p, "point"),
+                          "plane.point", (V3f){0, 0, 0});
+            plane.d = v3f_dot(plane.normal, plane.point);
 
-        scene.plane_count = P;
-        scene.planes = realloc(scene.planes, sizeof(Plane) * P);
-    }
-
-    cJSON *qitems = cJSON_GetObjectItemCaseSensitive(objects, "quad");
-    if (cJSON_IsArray(qitems)) {
-        int N = cJSON_GetArraySize(qitems);
-        for (int i = 0; i < N; i++) {
-            parse_quad(&scene, cJSON_GetArrayItem(qitems, i));
+            append_plane(scene, plane);
         }
     }
 
@@ -400,7 +417,15 @@ JSON load_scene(const char *scene_file) {
     if (cJSON_IsArray(titems)) {
         int N = cJSON_GetArraySize(titems);
         for (int i = 0; i < N; i++) {
-            parse_triangle(&scene, cJSON_GetArrayItem(titems, i));
+            parse_triangle(scene, cJSON_GetArrayItem(titems, i));
+        }
+    }
+
+    cJSON *qitems = cJSON_GetObjectItemCaseSensitive(objects, "quad");
+    if (cJSON_IsArray(qitems)) {
+        int N = cJSON_GetArraySize(qitems);
+        for (int i = 0; i < N; i++) {
+            parse_quad(scene, cJSON_GetArrayItem(qitems, i));
         }
     }
 
@@ -412,7 +437,7 @@ JSON load_scene(const char *scene_file) {
 
             int mi =
                 parse_mat_index(cJSON_GetObjectItemCaseSensitive(b, "material"),
-                                scene.material_count, "box.material");
+                                scene->material_count, "box.material");
 
             if (mi < 0) continue;
 
@@ -421,21 +446,34 @@ JSON load_scene(const char *scene_file) {
             V3f c = parse_v3f(cJSON_GetObjectItemCaseSensitive(b, "b"), "box.b",
                               (V3f){0});
 
-            add_box(&scene, a, c, mi);
+            add_box(scene, a, c, mi);
         }
     }
 
 END_PARSE:
     cJSON_Delete(json);
 
-    state.image = malloc(state.width * state.height * sizeof(uint32_t));
-    if (!state.image)
+    scene->obj_count = hv.count;
+    scene->objects = hv.hs;
+
+    state->image = malloc(state->width * state->height * sizeof(uint32_t));
+    if (!state->image)
         fatal(temp_sprintf("load_scene: image alloc failed: %s",
                            strerror(errno)));
 
-    scene.camera = camera;
+    scene->camera = camera;
 
     Log(Log_Info, temp_sprintf("load_scene: Loaded %s", scene_file));
+}
 
-    return (JSON){.scene = scene, .state = state};
+void free_scene(Scene *scene) {
+    if (!scene) return;
+
+    free(scene->objects);
+    scene->objects = NULL;
+    scene->obj_count = 0;
+
+    free(scene->materials);
+    scene->materials = NULL;
+    scene->material_count = 0;
 }

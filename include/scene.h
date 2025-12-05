@@ -23,13 +23,12 @@ typedef struct {
     int plane_count;
     int sphere_count;
     int quad_count;
-    int material_count;
     int triangle_count;
-    Plane *planes;
-    Sphere *spheres;
-    Quad *quads;
+    int material_count;
+    Hittable *objects;
+    int obj_count;
+    Hittable *bvh_root;
     Material *materials;
-    Triangle *triangles;
 
     Camera camera;
 } Scene;
@@ -39,5 +38,6 @@ typedef struct {
     State state;  // current image etc.
 } JSON;
 
-JSON load_scene(const char *scene_file);
-void print_summary(JSON res);
+void load_scene(const char *scene_file, Scene *scene, State *state);
+void print_summary(const Scene *scene, const State *state);
+void free_scene(Scene *scene);

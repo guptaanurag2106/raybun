@@ -10,7 +10,10 @@
 #include "utils.h"
 #include "vec.h"
 
-const Colour BACKGROUND = {0.1, 0.1, 0.1};
+static inline float linear_to_gamma(float linear_component) {
+    if (linear_component > 0) return sqrtf(linear_component);
+    return 0;
+}
 
 // argb
 uint32_t pack_colour(Colour colour) {
@@ -31,6 +34,7 @@ void calculate_camera_fields(Camera *cam) {
     cam->focal_length = 1 / tanf(cam->fov / 2);
 }
 
+const Colour BACKGROUND = {0.1, 0.1, 0.1};
 Colour ray_colour(Ray *ray, Scene *scene, int depth, int *ray_count) {
     (*ray_count)++;
     if (depth <= 0) return (Colour){0, 0, 0};

@@ -27,6 +27,14 @@ typedef struct {
 } Plane;
 
 typedef struct {
+    V3f p1, p2, p3;  // TODO: just store p1??
+    V3f e1, e2;      // calculate internally edges
+    V3f normal;      // calculate internally
+    int mat_index;
+    AABB aabb;
+} Triangle;
+
+typedef struct {
     V3f corner;
     V3f u;
     V3f v;
@@ -36,14 +44,6 @@ typedef struct {
     int mat_index;
     AABB aabb;
 } Quad;
-
-typedef struct {
-    V3f p1, p2, p3;
-    V3f e1, e2;  // calculate internally edges
-    V3f normal;  // calculate internally
-    int mat_index;
-    AABB aabb;
-} Triangle;
 
 typedef enum {
     MAT_NONE,
@@ -96,3 +96,25 @@ typedef struct {
     bool front_face;
     int mat_index;
 } HitRecord;
+
+typedef struct Hittable Hittable;
+
+typedef bool (*Hitfn)(const Hittable *self, const Ray *r, float tmin,
+                      float tmax, HitRecord *record);
+
+typedef bool (*AabbFn)(const Hittable *self, AABB *out_box);
+
+enum HittableType {
+    HITTABLE_SPHERE,
+    HITTABLE_PLANE,
+    HITTABLE_TRIANGLE,
+    HITTABLE_QUAD
+};
+
+struct Hittable {
+    Hitfn hit;
+    AabbFn bbox;  // aabb generator
+
+    enum HittableType type;  // TODO: remove if not needed
+    void *data;
+};

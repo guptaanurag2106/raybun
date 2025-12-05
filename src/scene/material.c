@@ -1,7 +1,6 @@
 #include <math.h>
 
 #include "common.h"
-#include "rinternal.h"
 #include "vec.h"
 
 // always scatter, attenuate, though with prob (1-reflectance R) we can just

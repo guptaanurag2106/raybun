@@ -219,15 +219,14 @@ static inline bool triangle_is_inside(float x1, float y1, float x2, float y2,
 //  String Utils
 // ----------------------------------------------------------------------------
 #define UTILS_MAX_TEMP_SIZE 1024 * 100
-// Will malloc combined, free it yourself
 void combine_charp(const char *str1, const char *str2, char **combined);
-// Will use the utils_static_payload_buffer and reset it everytime
+// Will use the utils_static_payload_buffer and reset it everytime its filled
 #define COMBINE(separator, ...) \
     combine_strings_with_sep_(separator, __VA_ARGS__, NULL)
-// Will use the utils_static_payload_buffer and reset it everytime, last
-// va_arg should be NULL
+// Will use the utils_static_payload_buffer and reset it everytime its filled,
+// last va_arg should be NULL
 char *combine_strings_with_sep_(const char *separator, ...);
-// Will use the utils_static_temp_buffer and reset it everytime
+// Will use the utils_static_temp_buffer and reset it everytime its filled
 char *temp_sprintf(const char *format, ...);
 
 // ----------------------------------------------------------------------------
@@ -456,9 +455,9 @@ char *temp_sprintf(const char *format, ...) {
     vsnprintf(utils_static_temp_buffer + utils_static_temp_buffer_pos,
               UTILS_MAX_TEMP_SIZE, format, args);
     va_end(args);
-    utils_static_temp_buffer_pos += n;
+    utils_static_temp_buffer_pos += n + 1;
 
-    return utils_static_temp_buffer + (utils_static_temp_buffer_pos - n);
+    return utils_static_temp_buffer + (utils_static_temp_buffer_pos - n - 1);
 }
 
 char *read_entire_file(const char *filename) {

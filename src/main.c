@@ -109,18 +109,23 @@ int main(int argc, char **argv) {
         }
     }
 
-    JSON json = load_scene(scene_json_file);
-    print_summary(json);
-    Scene scene = json.scene;
-    State state = json.state;
+    Scene *scene = malloc(sizeof(Scene));
+    memset(scene, 0, sizeof(Scene));
+    State *state = malloc(sizeof(State));
+    state->width = 1024;
+    state->height = 768;
+    state->samples_per_pixel = 10;
+    state->max_depth = 10;
+    load_scene(scene_json_file, scene, state);
+    print_summary(scene, state);
 
     srand(time(NULL));
 
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 
-    calculate_camera_fields(&scene.camera);
-    render_scene(&scene, &state);
+    calculate_camera_fields(&scene->camera);
+    render_scene(scene, state);
 
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
@@ -141,9 +146,10 @@ int main(int argc, char **argv) {
                 "Benchmark results: Completed in %fs, Performance Score: %f/10",
                 seconds, perf_score));
     }
+    free_scene(scene);
 
     if (mode != 3) {
-        export_image(output_name, state.image, state.width, state.height);
+        export_image(output_name, state->image, state->width, state->height);
     }
 
     return 0;

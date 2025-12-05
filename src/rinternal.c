@@ -1,16 +1,48 @@
 #include "rinternal.h"
 
+#include "aabb.h"
 #include "common.h"
 #include "scene.h"
 #include "vec.h"
+
+static inline V3f ray_at(const Ray *ray, float t) {
+    return v3f_add(ray->origin, v3f_mulf(ray->direction, t));
+}
 
 inline void set_face_normal(const Ray *r, const V3f *norm, HitRecord *record) {
     record->front_face = v3f_dot(r->direction, *norm) < 0;
     record->normal = record->front_face ? *norm : v3f_neg(*norm);
 }
 
-bool sphere_hit(const Sphere *sphere, const Ray *ray, float tmin, float tmax,
-                HitRecord *record) {
+Hittable make_hittable_sphere(Sphere *s) {
+    const float r = s->radius;
+    s->aabb = (AABB){
+        .xmin = s->center.x - r,
+        .xmax = s->center.x + r,
+        .ymin = s->center.y - r,
+        .ymax = s->center.y + r,
+        .zmin = s->center.z - r,
+        .zmax = s->center.z + r,
+    };
+    return (Hittable){.hit = sphere_hit, .data = s, .bbox = NULL};
+}
+
+Hittable make_hittable_plane(Plane *p) {
+    return (Hittable){.hit = plane_hit, .data = p, .bbox = NULL};
+}
+
+Hittable make_hittable_triangle(Triangle *t) {
+    return (Hittable){.hit = triangle_hit, .data = t, .bbox = NULL};
+}
+
+Hittable make_hittable_quad(Quad *q) {
+    q->aabb = aabb(q->corner, v3f_add(q->corner, v3f_add(q->u, q->v)));
+    return (Hittable){.hit = quad_hit, .data = q, .bbox = NULL};
+}
+
+bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                float tmax, HitRecord *record) {
+    const Sphere *sphere = hittable->data;
     V3f oc = v3f_sub(sphere->center, ray->origin);
     float a = v3f_slength(ray->direction);
     float h = v3f_dot(ray->direction, oc);
@@ -36,10 +68,11 @@ bool sphere_hit(const Sphere *sphere, const Ray *ray, float tmin, float tmax,
     return true;
 }
 
-bool plane_hit(const Plane *plane, const Ray *ray, float tmin, float tmax,
+bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin, float tmax,
                HitRecord *record) {
+    const Plane *plane = hittable->data;
     const float nd = v3f_dot(plane->normal, ray->direction);
-    if (fabs(nd) < EPS) return false;
+    if (nd > -EPS && nd < EPS) return false;
 
     const float t = (plane->d - v3f_dot(plane->normal, ray->origin)) / nd;
 
@@ -53,8 +86,9 @@ bool plane_hit(const Plane *plane, const Ray *ray, float tmin, float tmax,
     return true;
 }
 
-bool triangle_hit(const Triangle *tr, const Ray *ray, float tmin, float tmax,
-                  HitRecord *record) {
+bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                  float tmax, HitRecord *record) {
+    const Triangle *tr = hittable->data;
     V3f pvec = v3f_cross(ray->direction, tr->e2);
     float det = v3f_dot(tr->e1, pvec);
 
@@ -80,10 +114,11 @@ bool triangle_hit(const Triangle *tr, const Ray *ray, float tmin, float tmax,
     return true;
 }
 
-bool quad_hit(const Quad *quad, const Ray *ray, float tmin, float tmax,
+bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin, float tmax,
               HitRecord *record) {
+    const Quad *quad = hittable->data;
     const float nd = v3f_dot(quad->normal, ray->direction);
-    if (fabs(nd) < EPS) return false;  // no parallel rays
+    if (nd > -EPS && nd < EPS) return false;  // no parallel rays
 
     const float t = (quad->d - v3f_dot(quad->normal, ray->origin)) / nd;
     if (t <= tmin || t >= tmax) return false;
@@ -108,36 +143,15 @@ bool scene_hit(const Ray *r, const Scene *scene, float tmin, float tmax,
                HitRecord *record) {
     HitRecord temp_rec;
     bool hit = false;
-    for (int i = 0; i < scene->sphere_count; i++) {
-        if (sphere_hit(&(scene->spheres[i]), r, tmin, tmax, &temp_rec)) {
+    // return scene->bvh_root->hit(scene->bvh_root, r, tmin, tmax, record);
+    for (int i = 0; i < scene->obj_count; i++) {
+        if (scene->objects[i].hit(&scene->objects[i], r, tmin, tmax,
+                                  &temp_rec)) {
             tmax = temp_rec.t;
             *record = temp_rec;
             hit = true;
         }
     }
 
-    for (int i = 0; i < scene->plane_count; i++) {
-        if (plane_hit(&(scene->planes[i]), r, tmin, tmax, &temp_rec)) {
-            tmax = temp_rec.t;
-            *record = temp_rec;
-            hit = true;
-        }
-    }
-
-    for (int i = 0; i < scene->triangle_count; i++) {
-        if (triangle_hit(&(scene->triangles[i]), r, tmin, tmax, &temp_rec)) {
-            tmax = temp_rec.t;
-            *record = temp_rec;
-            hit = true;
-        }
-    }
-
-    for (int i = 0; i < scene->quad_count; i++) {
-        if (quad_hit(&(scene->quads[i]), r, tmin, tmax, &temp_rec)) {
-            tmax = temp_rec.t;
-            *record = temp_rec;
-            hit = true;
-        }
-    }
     return hit;
 }
