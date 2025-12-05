@@ -24,10 +24,12 @@ typedef struct {
     int sphere_count;
     int quad_count;
     int triangle_count;
-    int material_count;
+
     Hittable *objects;
     int obj_count;
-    Hittable *bvh_root;
+    Hittable bvh_root;
+
+    int material_count;
     Material *materials;
 
     Camera camera;

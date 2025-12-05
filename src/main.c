@@ -131,7 +131,7 @@ int main(int argc, char **argv) {
     timersub(&end, &start, &diff);
 
     if (mode == 3) {
-        double seconds = diff.tv_sec + diff.tv_usec * 1e-6;
+        float seconds = diff.tv_sec;
         float tmin = 5;
         float tmax = 20;
         float perf_score = -1;

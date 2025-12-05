@@ -71,6 +71,8 @@ VECDEF V3f v3f_comp_mul(V3f a, V3f b) {
 
 VECDEF V3f v3f_neg(V3f a) { return (V3f){-a.x, -a.y, -a.z}; }
 
+VECDEF V3f v3f_inv(V3f a) { return (V3f){1 / a.x, 1 / a.y, 1 / a.z}; }
+
 VECDEF void v3f_print(V3f a) { printf("x: %f, y: %f, z; %f\n", a.x, a.y, a.z); }
 
 VECDEF V3f v3f_clamp(V3f a, float min, float max) {
@@ -85,8 +87,8 @@ VECDEF V3f v3f_random_range(float min, float max) {
                  randf_range(min, max)};
 }
 
-VECDEF V3f
-v3f_random_unit() {  // TODO: find better way for random vector on sphere
+// TODO: find better way for random vector on sphere
+VECDEF V3f v3f_random_unit() {
     while (true) {
         V3f a = v3f_random();
         float len = v3f_slength(a);

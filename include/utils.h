@@ -112,6 +112,8 @@ void Log(enum Log_Level level, const char *message);
         exit(1);                                                              \
     } while (0)
 
+#define UNUSED(x) (void)(x)
+
 static inline char *shift(int *argc, char ***argv) {
     ASSERT(*argc > 0);
     (*argc)--;

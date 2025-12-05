@@ -112,7 +112,10 @@ void render_scene(Scene *scene, State *state) {
                         cam.position, v3f_add(v3f_mulf(defocus_disk_u, p.x),
                                               v3f_mulf(defocus_disk_v, p.y)));
                 }
-                Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position)};
+                Ray ray = {ray_origin,
+                           v3f_sub(pixel_center, cam.position)};
+                ray.dirslen = v3f_slength(ray.direction);
+                ray.inv_dir = v3f_inv(ray.direction);
                 colour = v3f_add(
                     ray_colour(&ray, scene, state->max_depth, &ray_count),
                     colour);
@@ -125,7 +128,7 @@ void render_scene(Scene *scene, State *state) {
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
 
-    double ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
+    float ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
     double time_per_ray = ms / ray_count;
 
     Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray",

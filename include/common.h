@@ -14,16 +14,14 @@ typedef struct {
     V3f center;
     float radius;
     int mat_index;
-    AABB aabb;
 } Sphere;
 
+// FIX: no bounding box run separately
 typedef struct {
     V3f normal;
     V3f point;  // any point on the plane
     float d;    // calculated internally normal.point
     int mat_index;
-    // TODO:
-    AABB aabb;
 } Plane;
 
 typedef struct {
@@ -31,7 +29,6 @@ typedef struct {
     V3f e1, e2;      // calculate internally edges
     V3f normal;      // calculate internally
     int mat_index;
-    AABB aabb;
 } Triangle;
 
 typedef struct {
@@ -42,7 +39,6 @@ typedef struct {
     float d;     // calculate internally (Ax+By=Cz=D)
     V3f w;       // calculate internally n/(n.n) for normalized n its just n
     int mat_index;
-    AABB aabb;
 } Quad;
 
 typedef enum {
@@ -87,6 +83,8 @@ typedef struct {
 typedef struct {
     V3f origin;
     V3f direction;
+    float dirslen;
+    V3f inv_dir;
 } Ray;
 
 typedef struct {
@@ -108,13 +106,19 @@ enum HittableType {
     HITTABLE_SPHERE,
     HITTABLE_PLANE,
     HITTABLE_TRIANGLE,
-    HITTABLE_QUAD
+    HITTABLE_QUAD,
+    HITTABLE_BVH
 };
 
 struct Hittable {
     Hitfn hit;
-    AabbFn bbox;  // aabb generator
+    AABB box;
 
     enum HittableType type;  // TODO: remove if not needed
     void *data;
 };
+
+typedef struct BVH_Node {
+    Hittable left;
+    Hittable right;
+} BVH_Node;

@@ -9,14 +9,15 @@ static inline V3f ray_at(const Ray *ray, float t) {
     return v3f_add(ray->origin, v3f_mulf(ray->direction, t));
 }
 
-inline void set_face_normal(const Ray *r, const V3f *norm, HitRecord *record) {
+// FIX:marking it inline gives linker error with debug??
+void set_face_normal(const Ray *r, const V3f *norm, HitRecord *record) {
     record->front_face = v3f_dot(r->direction, *norm) < 0;
     record->normal = record->front_face ? *norm : v3f_neg(*norm);
 }
 
 Hittable make_hittable_sphere(Sphere *s) {
     const float r = s->radius;
-    s->aabb = (AABB){
+    AABB aabb = (AABB){
         .xmin = s->center.x - r,
         .xmax = s->center.x + r,
         .ymin = s->center.y - r,
@@ -24,27 +25,45 @@ Hittable make_hittable_sphere(Sphere *s) {
         .zmin = s->center.z - r,
         .zmax = s->center.z + r,
     };
-    return (Hittable){.hit = sphere_hit, .data = s, .bbox = NULL};
+    return (Hittable){
+        .hit = sphere_hit, .type = HITTABLE_SPHERE, .data = s, .box = aabb};
 }
 
 Hittable make_hittable_plane(Plane *p) {
-    return (Hittable){.hit = plane_hit, .data = p, .bbox = NULL};
+    // TODO: no bounding box
+    return (Hittable){
+        .hit = plane_hit, .type = HITTABLE_PLANE, .data = p, .box = {0}};
 }
 
 Hittable make_hittable_triangle(Triangle *t) {
-    return (Hittable){.hit = triangle_hit, .data = t, .bbox = NULL};
+    // same as quad
+    AABB box1 = aabb(t->p1, v3f_add(t->p1, v3f_add(t->e1, t->e2)));
+    AABB box2 = aabb(t->p2, t->p3);
+    return (Hittable){.hit = triangle_hit,
+                      .type = HITTABLE_TRIANGLE,
+                      .data = t,
+                      .box = aabb_join(box1, box2)};
 }
 
 Hittable make_hittable_quad(Quad *q) {
-    q->aabb = aabb(q->corner, v3f_add(q->corner, v3f_add(q->u, q->v)));
-    return (Hittable){.hit = quad_hit, .data = q, .bbox = NULL};
+    AABB box1 = aabb(q->corner, v3f_add(q->corner, v3f_add(q->u, q->v)));
+    AABB box2 = aabb(v3f_add(q->corner, q->u), v3f_add(q->corner, q->v));
+    return (Hittable){.hit = quad_hit,
+                      .type = HITTABLE_QUAD,
+                      .data = q,
+                      .box = aabb_join(box1, box2)};
 }
 
-bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
-                float tmax, HitRecord *record) {
+Hittable make_hittable_bvh(BVH_Node *node, AABB box) {
+    return (Hittable){
+        .hit = aabb_hit, .type = HITTABLE_BVH, .data = node, .box = box};
+}
+
+inline bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                       float tmax, HitRecord *record) {
     const Sphere *sphere = hittable->data;
     V3f oc = v3f_sub(sphere->center, ray->origin);
-    float a = v3f_slength(ray->direction);
+    float a = ray->dirslen;
     float h = v3f_dot(ray->direction, oc);
     float c = v3f_slength(oc) - sphere->radius * sphere->radius;
 
@@ -68,8 +87,8 @@ bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
     return true;
 }
 
-bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin, float tmax,
-               HitRecord *record) {
+inline bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                      float tmax, HitRecord *record) {
     const Plane *plane = hittable->data;
     const float nd = v3f_dot(plane->normal, ray->direction);
     if (nd > -EPS && nd < EPS) return false;
@@ -86,8 +105,8 @@ bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin, float tmax,
     return true;
 }
 
-bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
-                  float tmax, HitRecord *record) {
+inline bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                         float tmax, HitRecord *record) {
     const Triangle *tr = hittable->data;
     V3f pvec = v3f_cross(ray->direction, tr->e2);
     float det = v3f_dot(tr->e1, pvec);
@@ -114,8 +133,8 @@ bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
     return true;
 }
 
-bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin, float tmax,
-              HitRecord *record) {
+inline bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                     float tmax, HitRecord *record) {
     const Quad *quad = hittable->data;
     const float nd = v3f_dot(quad->normal, ray->direction);
     if (nd > -EPS && nd < EPS) return false;  // no parallel rays
@@ -139,19 +158,59 @@ bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin, float tmax,
     return true;
 }
 
-bool scene_hit(const Ray *r, const Scene *scene, float tmin, float tmax,
-               HitRecord *record) {
-    HitRecord temp_rec;
-    bool hit = false;
-    // return scene->bvh_root->hit(scene->bvh_root, r, tmin, tmax, record);
-    for (int i = 0; i < scene->obj_count; i++) {
-        if (scene->objects[i].hit(&scene->objects[i], r, tmin, tmax,
-                                  &temp_rec)) {
-            tmax = temp_rec.t;
-            *record = temp_rec;
-            hit = true;
-        }
-    }
+inline bool aabb_hit(const Hittable *h, const Ray *r, float tmin, float tmax,
+                     HitRecord *rec) {
+    const BVH_Node *node = h->data;
+    const AABB box = h->box;
+    const V3f *origin = &(r->origin);
+    // x;
+    float adinv = r->inv_dir.x;
 
-    return hit;
+    float t0 = (box.xmin - origin->x) * adinv;
+    float t1 = (box.xmax - origin->x) * adinv;
+    if (t0 < t1) {
+        if (t0 > tmin) tmin = t0;
+        if (t1 < tmax) tmax = t1;
+    } else {
+        if (t1 > tmin) tmin = t1;
+        if (t0 < tmax) tmax = t0;
+    }
+    if (tmax <= tmin) return false;
+
+    // y;
+    adinv = r->inv_dir.y;
+    t0 = (box.ymin - origin->y) * adinv;
+    t1 = (box.ymax - origin->y) * adinv;
+    if (t0 < t1) {
+        if (t0 > tmin) tmin = t0;
+        if (t1 < tmax) tmax = t1;
+    } else {
+        if (t1 > tmin) tmin = t1;
+        if (t0 < tmax) tmax = t0;
+    }
+    if (tmax <= tmin) return false;
+
+    // z;
+    adinv = r->inv_dir.z;
+    t0 = (box.zmin - origin->z) * adinv;
+    t1 = (box.zmax - origin->z) * adinv;
+    if (t0 < t1) {
+        if (t0 > tmin) tmin = t0;
+        if (t1 < tmax) tmax = t1;
+    } else {
+        if (t1 > tmin) tmin = t1;
+        if (t0 < tmax) tmax = t0;
+    }
+    if (tmax <= tmin) return false;
+
+    bool hit_left = node->left.hit(&node->left, r, tmin, tmax, rec);
+    bool hit_right =
+        node->right.hit(&node->right, r, tmin, hit_left ? rec->t : tmax, rec);
+
+    return hit_left || hit_right;
+}
+
+inline bool scene_hit(const Ray *r, const Scene *scene, float tmin, float tmax,
+                      HitRecord *record) {
+    return scene->bvh_root.hit(&scene->bvh_root, r, tmin, tmax, record);
 }

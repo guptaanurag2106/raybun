@@ -1,7 +1,7 @@
 CC = gcc
 
 INCLUDES = -Iinclude -I./thirdparty/cJSON-1.7.19/ -I./thirdparty/
-CFLAGS_DEBUG   = -Wall -Wextra -ggdb -std=c11 -DDEBUG
+CFLAGS_DEBUG   = -Wall -Wextra -ggdb -std=c11 -DDEBUG -O0
 CFLAGS_RELEASE = -Wall -Wextra -O3 -std=c11 -march=native -funroll-loops -flto -ffunction-sections -fdata-sections -ffast-math
 
 LIBS = -L./thirdparty/cJSON-1.7.19/build -lcjson -lm

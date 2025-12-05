@@ -1,9 +1,9 @@
 #include <cJSON.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
-#include "common.h"
+#include "aabb.h"
 #include "rinternal.h"
-#include "scene.h"
 #include "utils.h"
 #include "vec.h"
 
@@ -20,7 +20,7 @@ void print_summary(const Scene *scene, const State *state) {
     Log(Log_Info, temp_sprintf("load_scene: Creating image of size %d x %d",
                                state->width, state->height));
     Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d spheres %d", scene->sphere_count));
+        temp_sprintf("load_scene: Loaded %d spheres", scene->sphere_count));
     Log(Log_Info,
         temp_sprintf("load_scene: Loaded %d planes", scene->plane_count));
     Log(Log_Info,
@@ -125,7 +125,6 @@ static void append_sphere(Scene *scene, Sphere sphere) {
     *sphere_data = sphere;
 
     Hittable h = make_hittable_sphere(sphere_data);
-    h.type = HITTABLE_SPHERE;
     append_hittable(h);
 }
 
@@ -134,7 +133,6 @@ static void append_plane(Scene *scene, Plane plane) {
     Plane *plane_data = malloc(sizeof(Plane));
     *plane_data = plane;
     Hittable h = make_hittable_plane(plane_data);
-    h.type = HITTABLE_PLANE;
     append_hittable(h);
 }
 
@@ -143,7 +141,6 @@ static void append_triangle(Scene *scene, Triangle triangle) {
     Triangle *triangle_data = malloc(sizeof(Triangle));
     *triangle_data = triangle;
     Hittable h = make_hittable_triangle(triangle_data);
-    h.type = HITTABLE_TRIANGLE;
     append_hittable(h);
 }
 
@@ -152,10 +149,10 @@ static void append_quad(Scene *scene, Quad quad) {
     Quad *quad_data = malloc(sizeof(Quad));
     *quad_data = quad;
     Hittable h = make_hittable_quad(quad_data);
-    h.type = HITTABLE_QUAD;
     append_hittable(h);
 }
 
+// TODO: currently axis aligned box support transformations
 static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
     V3f minp = {MIN(a.x, b.x), MIN(a.y, b.y), MIN(a.z, b.z)};
 
@@ -225,6 +222,9 @@ static int parse_triangle(Scene *scene, cJSON *tnode) {
 }
 
 void load_scene(const char *scene_file, Scene *scene, State *state) {
+    struct timeval start, end, diff;
+    gettimeofday(&start, NULL);
+
     const char *file = read_entire_file(scene_file);
     if (!file) fatal("load_scene: cannot read file.");
 
@@ -455,6 +455,7 @@ END_PARSE:
 
     scene->obj_count = hv.count;
     scene->objects = hv.hs;
+    scene->bvh_root = construct_bvh(scene->objects, 0, scene->obj_count);
 
     state->image = malloc(state->width * state->height * sizeof(uint32_t));
     if (!state->image)
@@ -462,8 +463,12 @@ END_PARSE:
                            strerror(errno)));
 
     scene->camera = camera;
+    gettimeofday(&end, NULL);
+    timersub(&end, &start, &diff);
+    float ms = diff.tv_sec * 100 + diff.tv_usec * 1e-3;
 
-    Log(Log_Info, temp_sprintf("load_scene: Loaded %s", scene_file));
+    Log(Log_Info,
+        temp_sprintf("load_scene: Loaded %s in %fms", scene_file, ms));
 }
 
 void free_scene(Scene *scene) {
