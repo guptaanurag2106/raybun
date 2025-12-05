@@ -3,11 +3,11 @@
 #include "scene.h"
 #include "vec.h"
 
-static inline V3f ray_at(Ray ray, float t) {
-    return v3f_add(ray.origin, v3f_mulf(ray.direction, t));
+static inline V3f ray_at(const Ray *ray, float t) {
+    return v3f_add(ray->origin, v3f_mulf(ray->direction, t));
 }
 
-bool scene_hit(const Ray *r, Scene *scene, float tmin, float tmax,
+bool scene_hit(const Ray *r, const Scene *scene, float tmin, float tmax,
                HitRecord *record);
 
 static inline float linear_to_gamma(float linear_component) {

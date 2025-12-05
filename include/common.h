@@ -5,9 +5,16 @@
 typedef V3f Colour;
 
 typedef struct {
+    float xmin, xmax;
+    float ymin, ymax;
+    float zmin, zmax;
+} AABB;
+
+typedef struct {
     V3f center;
     float radius;
     int mat_index;
+    AABB aabb;
 } Sphere;
 
 typedef struct {
@@ -15,6 +22,8 @@ typedef struct {
     V3f point;  // any point on the plane
     float d;    // calculated internally normal.point
     int mat_index;
+    // TODO:
+    AABB aabb;
 } Plane;
 
 typedef struct {
@@ -25,9 +34,15 @@ typedef struct {
     float d;     // calculate internally (Ax+By=Cz=D)
     V3f w;       // calculate internally n/(n.n) for normalized n its just n
     int mat_index;
+    AABB aabb;
 } Quad;
 
 typedef struct {
+    V3f p1, p2, p3;
+    V3f e1, e2;  // calculate internally edges
+    V3f normal;  // calculate internally
+    int mat_index;
+    AABB aabb;
 } Triangle;
 
 typedef enum {

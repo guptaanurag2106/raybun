@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "aabb.h"
 #include "common.h"
 #include "scene.h"
 #include "utils.h"
@@ -83,8 +84,20 @@ static Quad make_quad(V3f corner, V3f u, V3f v, int mat_index) {
     q.normal = nn;
     q.d = v3f_dot(nn, corner);
     q.w = v3f_mulf(n, 1.0f / L);
-
+    q.aabb = aabb(q.corner, v3f_add(q.corner, v3f_add(q.u, q.v)));
     return q;
+}
+
+static Triangle make_triangle(V3f p1, V3f p2, V3f p3, int mat_index) {
+    V3f e1 = v3f_sub(p2, p1);
+    V3f e2 = v3f_sub(p3, p1);
+    return (Triangle){.p1 = p1,
+                      .p2 = p2,
+                      .p3 = p3,
+                      .normal = v3f_cross(e1, e2),
+                      .e1 = e1,
+                      .e2 = e2,
+                      .mat_index = mat_index};
 }
 
 static void append_quad(Scene *scene, Quad quad) {
@@ -93,10 +106,16 @@ static void append_quad(Scene *scene, Quad quad) {
     scene->quads[scene->quad_count++] = quad;
 }
 
-static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
-    V3f minp = {fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z)};
+static void append_triangle(Scene *scene, Triangle triangle) {
+    scene->triangles = realloc(scene->triangles,
+                               sizeof(Triangle) * (scene->triangle_count + 1));
+    scene->triangles[scene->triangle_count++] = triangle;
+}
 
-    V3f maxp = {fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z)};
+static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
+    V3f minp = {MIN(a.x, b.x), MIN(a.y, b.y), MIN(a.z, b.z)};
+
+    V3f maxp = {MAX(a.x, b.x), MAX(a.y, b.y), MAX(a.z, b.z)};
 
     V3f dx = {maxp.x - minp.x, 0, 0};
     V3f dy = {0, maxp.y - minp.y, 0};
@@ -111,8 +130,8 @@ static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
                                  (V3f){-dz.x, -dz.y, -dz.z}, mat_index));
 
     // back
-    append_quad(scene, make_quad((V3f){maxp.x, minp.y, minp.z},
-                                 dy, (V3f){-dx.x, -dx.y, -dx.z}, mat_index));
+    append_quad(scene, make_quad((V3f){maxp.x, minp.y, minp.z}, dy,
+                                 (V3f){-dx.x, -dx.y, -dx.z}, mat_index));
 
     // left
     append_quad(scene,
@@ -141,6 +160,23 @@ static int parse_quad(Scene *scene, cJSON *qnode) {
     V3f V = parse_v3f(v, "quad.v", (V3f){0});
 
     append_quad(scene, make_quad(C, U, V, mi));
+    return 1;
+}
+
+static int parse_triangle(Scene *scene, cJSON *tnode) {
+    cJSON *p1 = cJSON_GetObjectItemCaseSensitive(tnode, "p1");
+    cJSON *p2 = cJSON_GetObjectItemCaseSensitive(tnode, "p2");
+    cJSON *p3 = cJSON_GetObjectItemCaseSensitive(tnode, "p3");
+    cJSON *mat_i = cJSON_GetObjectItemCaseSensitive(tnode, "material");
+
+    int mi = parse_mat_index(mat_i, scene->material_count, "triangle.material");
+    if (mi < 0) return 0;
+
+    V3f P1 = parse_v3f(p1, "triangle.p1", (V3f){0});
+    V3f P2 = parse_v3f(p2, "triangle.p2", (V3f){0});
+    V3f P3 = parse_v3f(p3, "triangle.p3", (V3f){0});
+
+    append_triangle(scene, make_triangle(P1, P2, P3, mi));
     return 1;
 }
 
@@ -303,7 +339,16 @@ JSON load_scene(const char *scene_file) {
             Sphere *dst = &scene.spheres[S];
             dst->mat_index = mi;
             dst->center = parse_v3f(center, "sphere.center", (V3f){0});
-            dst->radius = parse_float(radius, "sphere.radius", 0);
+            const float r = parse_float(radius, "sphere.radius", 0);
+            dst->radius = r;
+            dst->aabb = (AABB){
+                .xmin = dst->center.x - r,
+                .xmax = dst->center.x + r,
+                .ymin = dst->center.y - r,
+                .ymax = dst->center.y + r,
+                .zmin = dst->center.z - r,
+                .zmax = dst->center.z + r,
+            };
             if (dst->radius <= 0) {
                 log_warn("sphere.radius: must be >0, skipping.");
                 continue;
@@ -351,6 +396,14 @@ JSON load_scene(const char *scene_file) {
         }
     }
 
+    cJSON *titems = cJSON_GetObjectItemCaseSensitive(objects, "triangle");
+    if (cJSON_IsArray(titems)) {
+        int N = cJSON_GetArraySize(titems);
+        for (int i = 0; i < N; i++) {
+            parse_triangle(&scene, cJSON_GetArrayItem(titems, i));
+        }
+    }
+
     cJSON *bitems = cJSON_GetObjectItemCaseSensitive(objects, "boxes");
     if (cJSON_IsArray(bitems)) {
         int N = cJSON_GetArraySize(bitems);
@@ -382,7 +435,7 @@ END_PARSE:
 
     scene.camera = camera;
 
-    Log(Log_Info, temp_sprintf("load_scene: loaded %s", scene_file));
+    Log(Log_Info, temp_sprintf("load_scene: Loaded %s", scene_file));
 
     return (JSON){.scene = scene, .state = state};
 }

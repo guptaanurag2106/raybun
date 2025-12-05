@@ -39,5 +39,5 @@ typedef struct {
     State state;  // current image etc.
 } JSON;
 
-void print_summary(JSON res);
 JSON load_scene(const char *scene_file);
+void print_summary(JSON res);

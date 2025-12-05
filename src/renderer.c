@@ -52,6 +52,7 @@ Colour ray_colour(Ray *ray, Scene *scene, int depth, int *ray_count) {
         if (!scatter(mat, &record, ray, &attenuation, &scattered)) {
             return colour_emission;
         }
+
         Colour scatter = v3f_comp_mul(
             attenuation, ray_colour(&scattered, scene, depth - 1, ray_count));
         return v3f_add(colour_emission, scatter);
@@ -123,6 +124,6 @@ void render_scene(Scene *scene, State *state) {
     double ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
     double time_per_ray = ms / ray_count;
 
-    Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray", ray_count,
-                               (long int)ms, time_per_ray));
+    Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray",
+                               ray_count, (long int)ms, time_per_ray));
 }
