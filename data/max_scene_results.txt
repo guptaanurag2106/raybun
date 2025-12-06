@@ -1,0 +1,33 @@
+No BVH just Hittable abstraction: 
+[INFO] load_scene: Loaded data/max_scene.json in 1.723000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 300 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 80 triangles
+[INFO] load_scene: Loaded 100 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Rendered 1664292998 rays in 16206679ms or 0.009738ms/ray, Total hits: primitive 2859445874400, aabb 0
+[INFO] export_image: Successfully written data/max_scene.ppm
+
+Rays:           ~1.664B
+Primitive hits: 2.859T   (≈ 2.8 trillion)
+Time:           16206 sec  (270 minutes)
+Cost:           0.009738 ms/ray
+
+------------------------------------------------------------------------------------------------------------------------
+
+With BVH:
+[INFO] load_scene: Loaded data/max_scene.json in 1.177000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 300 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 80 triangles
+[INFO] load_scene: Loaded 100 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Rendered 1664667338 rays in 5965940ms or 0.003584ms/ray, Total hits: primitive 118078311251, aabb 1053166046329
+
+Rays:           ~1.664B
+Primitive hits: 118B     (≈ 118 billion)
+AABB hits:      1.053T    (≈ 1 trillion)
+Time:           5965 sec  (99 minutes)
+Cost:           0.003584 ms/ray
