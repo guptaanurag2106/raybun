@@ -1,63 +1,54 @@
 {
   "config": {
-    "width": 1920,
+    "width": 1080,
     "height": 1080,
-    "samples_per_pixel": 150,
+    "samples_per_pixel": 50,
     "max_depth": 50
   },
   "camera": {
-    "position": [0, 2, 8],
-    "look_at": [0, 1, 0],
+    "position": [0, 0, 80],
+    "look_at": [0, 0, 0],
     "up": [0, 1, 0],
     "fov": 90,
-    "aspect_ratio": "16/9",
-    "defocus_angle": 0.1,
-    "focus_dist": 4.0
+    "aspect_ratio": "1/1",
+    "defocus_angle": 0,
+    "focus_dist": 10.0
   },
+
   "objects": {
     "sphere": [
-      { "center": [-5, 2, -5], "radius": 2.0, "material": 1 },
-      { "center": [4, 7, -7], "radius": 1.5, "material": 2 }
+      { "center": [50, 0, -50], "radius": 20, "material": 1 }
     ],
-    "quads": [
+
+    "plane": [
+    ],
+
+    "triangle": [
         {
-          "corner": [-120, -120, -40],
-          "u": [0, 240, 0],
-          "v": [0, 0, -160],
-          "material": 5
+            "p1": [20, 20, -195],
+            "p2": [40, 0, -195],
+            "p3": [0, 0, -195],
+            "material": 6
+        }
+    ],
+
+    "quad": [
+    ],
+
+    "boxes": [
+        {
+            "a": [-30, -120, -140],
+            "b": [-90, 20, -200],
+            "material": 2
         },
         {
-          "corner": [120, -120, -40],
-          "u": [0, 0, -160],
-          "v": [0, 240, 0],
-          "material": 4
-        },
-        {
-          "corner": [-120, 120, -40],
-          "u": [240, 0, 0],
-          "v": [0, 0, -160],
-          "material": 2
-        },
-        {
-          "corner": [-120, -120, -40],
-          "u": [0, 0, -160],
-          "v": [240, 0, 0],
-          "material": 2
-        },
-        {
-          "corner": [-120, -120, -200],
-          "u": [0, 240, 0],
-          "v": [240, 0, 0],
-          "material": 2
-        },
-        {
-          "corner": [-40, 119, -100],
-          "u": [80, 0, 0],
-          "v": [0, 0, -40],
-          "material": 1
+            "a": [-40, -120, -120],
+            "b": [0, -20, -80],
+            "material": 2
         }
     ]
   },
+
   "materials": [
     { "type": "dielectric", "refraction_index": 1.5 },
     { "type": "emissive", "emission": [1, 1, 1] },
@@ -70,3 +61,4 @@
     { "type": "lambertian", "albedo": [0.7, 0.7, 0.7] }
   ]
 }
+

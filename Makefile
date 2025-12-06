@@ -9,6 +9,7 @@ LD_FLAGS = -flto -Wl,--gc-sections -Wl,-rpath,./thirdparty/cJSON-1.7.19/build/
 
 SRC_DIR   = src
 BUILD_DIR = build
+DATA_DIR = data
 
 SRC = $(shell find $(SRC_DIR) -type f -name "*.c")
 
@@ -32,8 +33,12 @@ debug:   $(RAYBUN)
 release: CFLAGS = $(CFLAGS_RELEASE)
 release: $(RAYBUN)
 
+max_scene_gen: 
+	$(CC) -o $(DATA_DIR)/max_scene_gen $(DATA_DIR)/max_scene_gen.c  -lm
+	$(DATA_DIR)/max_scene_gen > $(DATA_DIR)/max_scene.json
+
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all clean debug release
+.PHONY: all clean debug release max_scene_gen
 

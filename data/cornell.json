@@ -2,8 +2,8 @@
   "config": {
     "width": 1080,
     "height": 1080,
-    "samples_per_pixel": 100,
-    "max_depth": 100
+    "samples_per_pixel": 500,
+    "max_depth": 50
   },
   "camera": {
     "position": [0, 0, 80],

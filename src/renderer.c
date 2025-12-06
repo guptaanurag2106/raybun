@@ -112,8 +112,7 @@ void render_scene(Scene *scene, State *state) {
                         cam.position, v3f_add(v3f_mulf(defocus_disk_u, p.x),
                                               v3f_mulf(defocus_disk_v, p.y)));
                 }
-                Ray ray = {ray_origin,
-                           v3f_sub(pixel_center, cam.position)};
+                Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position)};
                 ray.dirslen = v3f_slength(ray.direction);
                 ray.inv_dir = v3f_inv(ray.direction);
                 colour = v3f_add(
@@ -131,6 +130,8 @@ void render_scene(Scene *scene, State *state) {
     float ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
     double time_per_ray = ms / ray_count;
 
-    Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray",
-                               ray_count, (long int)ms, time_per_ray));
+    Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray, Total "
+                               "hits: primitive %ld, aabb %ld",
+                               ray_count, (long int)ms, time_per_ray,
+                               get_prim_hitc(), get_aabb_hitc()));
 }

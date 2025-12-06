@@ -100,21 +100,12 @@ typedef struct Hittable Hittable;
 typedef bool (*Hitfn)(const Hittable *self, const Ray *r, float tmin,
                       float tmax, HitRecord *record);
 
-typedef bool (*AabbFn)(const Hittable *self, AABB *out_box);
-
-enum HittableType {
-    HITTABLE_SPHERE,
-    HITTABLE_PLANE,
-    HITTABLE_TRIANGLE,
-    HITTABLE_QUAD,
-    HITTABLE_BVH
-};
+// typedef bool (*AabbFn)(const Hittable *self, AABB *out_box);
 
 struct Hittable {
     Hitfn hit;
     AABB box;
 
-    enum HittableType type;  // TODO: remove if not needed
     void *data;
 };
 

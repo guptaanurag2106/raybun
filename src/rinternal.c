@@ -15,52 +15,11 @@ void set_face_normal(const Ray *r, const V3f *norm, HitRecord *record) {
     record->normal = record->front_face ? *norm : v3f_neg(*norm);
 }
 
-Hittable make_hittable_sphere(Sphere *s) {
-    const float r = s->radius;
-    AABB aabb = (AABB){
-        .xmin = s->center.x - r,
-        .xmax = s->center.x + r,
-        .ymin = s->center.y - r,
-        .ymax = s->center.y + r,
-        .zmin = s->center.z - r,
-        .zmax = s->center.z + r,
-    };
-    return (Hittable){
-        .hit = sphere_hit, .type = HITTABLE_SPHERE, .data = s, .box = aabb};
-}
-
-Hittable make_hittable_plane(Plane *p) {
-    // TODO: no bounding box
-    return (Hittable){
-        .hit = plane_hit, .type = HITTABLE_PLANE, .data = p, .box = {0}};
-}
-
-Hittable make_hittable_triangle(Triangle *t) {
-    // same as quad
-    AABB box1 = aabb(t->p1, v3f_add(t->p1, v3f_add(t->e1, t->e2)));
-    AABB box2 = aabb(t->p2, t->p3);
-    return (Hittable){.hit = triangle_hit,
-                      .type = HITTABLE_TRIANGLE,
-                      .data = t,
-                      .box = aabb_join(box1, box2)};
-}
-
-Hittable make_hittable_quad(Quad *q) {
-    AABB box1 = aabb(q->corner, v3f_add(q->corner, v3f_add(q->u, q->v)));
-    AABB box2 = aabb(v3f_add(q->corner, q->u), v3f_add(q->corner, q->v));
-    return (Hittable){.hit = quad_hit,
-                      .type = HITTABLE_QUAD,
-                      .data = q,
-                      .box = aabb_join(box1, box2)};
-}
-
-Hittable make_hittable_bvh(BVH_Node *node, AABB box) {
-    return (Hittable){
-        .hit = aabb_hit, .type = HITTABLE_BVH, .data = node, .box = box};
-}
-
-inline bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
-                       float tmax, HitRecord *record) {
+long prim_hitc = 0;
+long aabb_hitc = 0;
+static inline bool sphere_hit(const Hittable *hittable, const Ray *ray,
+                              float tmin, float tmax, HitRecord *record) {
+    prim_hitc++;
     const Sphere *sphere = hittable->data;
     V3f oc = v3f_sub(sphere->center, ray->origin);
     float a = ray->dirslen;
@@ -87,8 +46,9 @@ inline bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
     return true;
 }
 
-inline bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin,
-                      float tmax, HitRecord *record) {
+static inline bool plane_hit(const Hittable *hittable, const Ray *ray,
+                             float tmin, float tmax, HitRecord *record) {
+    prim_hitc++;
     const Plane *plane = hittable->data;
     const float nd = v3f_dot(plane->normal, ray->direction);
     if (nd > -EPS && nd < EPS) return false;
@@ -105,8 +65,9 @@ inline bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin,
     return true;
 }
 
-inline bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
-                         float tmax, HitRecord *record) {
+static inline bool triangle_hit(const Hittable *hittable, const Ray *ray,
+                                float tmin, float tmax, HitRecord *record) {
+    prim_hitc++;
     const Triangle *tr = hittable->data;
     V3f pvec = v3f_cross(ray->direction, tr->e2);
     float det = v3f_dot(tr->e1, pvec);
@@ -133,8 +94,9 @@ inline bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
     return true;
 }
 
-inline bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin,
-                     float tmax, HitRecord *record) {
+static inline bool quad_hit(const Hittable *hittable, const Ray *ray,
+                            float tmin, float tmax, HitRecord *record) {
+    prim_hitc++;
     const Quad *quad = hittable->data;
     const float nd = v3f_dot(quad->normal, ray->direction);
     if (nd > -EPS && nd < EPS) return false;  // no parallel rays
@@ -158,8 +120,9 @@ inline bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin,
     return true;
 }
 
-inline bool aabb_hit(const Hittable *h, const Ray *r, float tmin, float tmax,
-                     HitRecord *rec) {
+static inline bool aabb_hit(const Hittable *h, const Ray *r, float tmin,
+                            float tmax, HitRecord *rec) {
+    aabb_hitc++;
     const BVH_Node *node = h->data;
     const AABB box = h->box;
     const V3f *origin = &(r->origin);
@@ -210,7 +173,46 @@ inline bool aabb_hit(const Hittable *h, const Ray *r, float tmin, float tmax,
     return hit_left || hit_right;
 }
 
-inline bool scene_hit(const Ray *r, const Scene *scene, float tmin, float tmax,
-                      HitRecord *record) {
+bool scene_hit(const Ray *r, const Scene *scene, float tmin, float tmax,
+               HitRecord *record) {
     return scene->bvh_root.hit(&scene->bvh_root, r, tmin, tmax, record);
 }
+
+Hittable make_hittable_sphere(Sphere *s) {
+    const float r = s->radius;
+    AABB aabb = (AABB){
+        .xmin = s->center.x - r,
+        .xmax = s->center.x + r,
+        .ymin = s->center.y - r,
+        .ymax = s->center.y + r,
+        .zmin = s->center.z - r,
+        .zmax = s->center.z + r,
+    };
+    return (Hittable){.hit = sphere_hit, .data = s, .box = aabb};
+}
+
+Hittable make_hittable_plane(Plane *p) {
+    // TODO: no bounding box
+    return (Hittable){.hit = plane_hit, .data = p, .box = {0}};
+}
+
+Hittable make_hittable_triangle(Triangle *t) {
+    // same as quad
+    AABB box1 = aabb(t->p1, v3f_add(t->p1, v3f_add(t->e1, t->e2)));
+    AABB box2 = aabb(t->p2, t->p3);
+    return (Hittable){
+        .hit = triangle_hit, .data = t, .box = aabb_join(box1, box2)};
+}
+
+Hittable make_hittable_quad(Quad *q) {
+    AABB box1 = aabb(q->corner, v3f_add(q->corner, v3f_add(q->u, q->v)));
+    AABB box2 = aabb(v3f_add(q->corner, q->u), v3f_add(q->corner, q->v));
+    return (Hittable){.hit = quad_hit, .data = q, .box = aabb_join(box1, box2)};
+}
+
+Hittable make_hittable_bvh(BVH_Node *node, AABB box) {
+    return (Hittable){.hit = aabb_hit, .data = node, .box = box};
+}
+
+long get_prim_hitc() { return prim_hitc; }
+long get_aabb_hitc() { return aabb_hitc; }
