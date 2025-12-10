@@ -25,9 +25,9 @@ typedef struct {
 } Plane;
 
 typedef struct {
-    V3f p1, p2, p3;  // TODO: just store p1??
-    V3f e1, e2;      // calculate internally edges
-    V3f normal;      // calculate internally
+    V3f p1, p2, p3;
+    V3f e1, e2;  // calculate internally edges
+    V3f normal;  // calculate internally
     int mat_index;
 } Triangle;
 
@@ -83,7 +83,6 @@ typedef struct {
 typedef struct {
     V3f origin;
     V3f direction;
-    float dirslen;
     V3f inv_dir;
 } Ray;
 

@@ -14,8 +14,7 @@ bool lambertian_scatter(const Material *mat, const HitRecord *rec,
     if (v3f_near_zero(scatter_dir)) {
         scatter_dir = rec->normal;
     }
-    *ray_out = (Ray){rec->point, scatter_dir, v3f_slength(scatter_dir),
-                     v3f_inv(scatter_dir)};
+    *ray_out = (Ray){rec->point, scatter_dir, v3f_inv(scatter_dir)};
     *attenuation = mat->properties.lambertian.albedo;
     return true;
 }
@@ -28,8 +27,7 @@ bool metal_scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
     reflected_dir =
         v3f_add(v3f_normalize(reflected_dir),
                 v3f_mulf(v3f_random_unit(), mat->properties.metal.fuzz));
-    *ray_out = (Ray){rec->point, reflected_dir, v3f_slength(reflected_dir),
-                     v3f_inv(reflected_dir)};
+    *ray_out = (Ray){rec->point, reflected_dir, v3f_inv(reflected_dir)};
     *attenuation = mat->properties.metal.albedo;
     return v3f_dot(reflected_dir, rec->normal) > 0;
 }
@@ -59,8 +57,7 @@ bool dielectric_scatter(const Material *mat, const HitRecord *rec,
     } else {
         direction = v3f_reflect(norm_direction, rec->normal);
     }
-    *ray_out = (Ray){rec->point, direction, v3f_slength(direction),
-                     v3f_inv(direction)};
+    *ray_out = (Ray){rec->point, direction, v3f_inv(direction)};
     return true;
 }
 

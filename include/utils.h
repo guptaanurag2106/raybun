@@ -144,6 +144,20 @@ static inline void timersub(const struct timeval *a, const struct timeval *b,
 #define DEG2RAD(_d) ((_d) * (PI / 180.0f))
 #define RAD2DEG(_r) ((_r) * (180.0f / PI))
 
+#define CEILF(x)                                  \
+    ({                                            \
+        float _x = (x);                           \
+        int _i = (int)_x;                         \
+        (_i == _x) ? _i : (_x > 0 ? _i + 1 : _i); \
+    })
+
+#define FLOATF(x)                                 \
+    ({                                            \
+        float _x = (x);                           \
+        int _i = (int)_x;                         \
+        (_i == _x) ? _i : (_x > 0 ? _i : _i - 1); \
+    })
+
 static inline float lerp_float(float start, float end, float t) {
     return start + t * (end - start);
 }

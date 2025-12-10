@@ -64,7 +64,12 @@ void export_image(const char *output_file_name, const uint32_t *image,
                   const int width, const int height) {
     if (strstr(output_file_name, ".png") != NULL) {
         export_png(output_file_name, image, width, height);
+    } else if (strstr(output_file_name, ".ppm") != NULL) {
+        export_ppm(output_file_name, image, width, height);
     } else {
+        Log(Log_Warn,
+            "Output format not supported, outputting ppm instead with the same "
+            "name");
         export_ppm(output_file_name, image, width, height);
     }
 

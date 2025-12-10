@@ -22,7 +22,7 @@ static inline bool sphere_hit(const Hittable *hittable, const Ray *ray,
     prim_hitc++;
     const Sphere *sphere = hittable->data;
     V3f oc = v3f_sub(sphere->center, ray->origin);
-    float a = ray->dirslen;
+    float a = v3f_slength(ray->direction);
     float h = v3f_dot(ray->direction, oc);
     float c = v3f_slength(oc) - sphere->radius * sphere->radius;
 
@@ -197,8 +197,7 @@ Hittable make_hittable_plane(Plane *p) {
 }
 
 Hittable make_hittable_triangle(Triangle *t) {
-    // same as quad
-    AABB box1 = aabb(t->p1, v3f_add(t->p1, v3f_add(t->e1, t->e2)));
+    AABB box1 = aabb(t->p1, t->p2);
     AABB box2 = aabb(t->p2, t->p3);
     return (Hittable){
         .hit = triangle_hit, .data = t, .box = aabb_join(box1, box2)};
