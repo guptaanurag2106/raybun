@@ -1,7 +1,10 @@
 #include "renderer.h"
 
 #include <math.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <sys/time.h>
 
 #include "common.h"
@@ -65,6 +68,58 @@ Colour ray_colour(Ray *ray, Scene *scene, int depth, int *ray_count) {
     return BACKGROUND;
 }
 
+void *render_tile(void *arg) {
+    Work *work = arg;
+    Scene scene = work->scene;
+    Camera cam = scene.camera;
+
+    int ray_count = 0;
+    int curr_tile;
+    rng_seed_tls((uint32_t)time(NULL) ^ (uint32_t)(uintptr_t)pthread_self());
+
+    while (true) {
+        curr_tile = atomic_fetch_add(&work->tile_finished, 1);
+        if (curr_tile >= work->tile_count) break;
+
+        Tile tile = work->tiles[curr_tile];
+
+        for (int j = tile.y; j < tile.y + tile.th; j++) {
+            for (int i = tile.x; i < tile.x + tile.tw; i++) {
+                Colour colour = (V3f){0, 0, 0};
+
+                for (int s = 0; s < work->samples_per_pixel; s++) {
+                    V3f pixel_center =
+                        v3f_add(work->pixel00_loc,
+                                v3f_add(v3f_mulf(work->pixel_delta_u,
+                                                 i + rng_f32_tls() - 0.5),
+                                        v3f_mulf(work->pixel_delta_v,
+                                                 j + rng_f32_tls() - 0.5)));
+                    V3f ray_origin;
+                    if (cam.defocus_angle <= 0) {
+                        ray_origin = cam.position;
+                    } else {
+                        V3f p = v3f_random_in_unit_disk();
+                        ray_origin = v3f_add(
+                            cam.position,
+                            v3f_add(v3f_mulf(work->defocus_disk_u, p.x),
+                                    v3f_mulf(work->defocus_disk_v, p.y)));
+                    }
+                    Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position)};
+                    ray.inv_dir = v3f_inv(ray.direction);
+                    colour = v3f_add(
+                        ray_colour(&ray, &scene, work->max_depth, &ray_count),
+                        colour);
+                }
+                work->image[j * work->width + i] =
+                    pack_colour(v3f_mulf(colour, work->colour_contribution));
+            }
+        }
+    }
+    atomic_fetch_add(&work->ray_count, ray_count);
+
+    pthread_exit(NULL);
+}
+
 void render_scene(Scene *scene, State *state) {
     const int width = state->width;
     const int height = state->height;
@@ -89,41 +144,65 @@ void render_scene(Scene *scene, State *state) {
     V3f defocus_disk_u = v3f_mulf(cam.right, defocus_radius);
     V3f defocus_disk_v = v3f_mulf(cam.up, defocus_radius);
 
-    int ray_count = 0;
-    struct timeval start, end, diff;
-    gettimeofday(&start, NULL);
-    const float colour_contribution = 1.0f / state->samples_per_pixel;
+    const int tile_count =
+        CEILF((float)width / TILE_WIDTH) * CEILF((float)height / TILE_HEIGHT);
 
-    for (int j = 0; j < height; j++) {
-        for (int i = 0; i < width; i++) {
-            Colour colour = (V3f){0, 0, 0};
+    Tile *tiles = malloc(sizeof(*tiles) * tile_count);
+    Log(Log_Info, temp_sprintf("Breaking into %d tiles", tile_count));
+    if (tiles == NULL) {
+        Log(Log_Warn, "render_scene: Could not allocate tiles");
+        exit(1);
+    }
 
-            for (int s = 0; s < state->samples_per_pixel; s++) {
-                V3f pixel_center = v3f_add(
-                    pixel00_loc,
-                    v3f_add(v3f_mulf(pixel_delta_u, i + randf() - 0.5),
-                            v3f_mulf(pixel_delta_v, j + randf() - 0.5)));
-                V3f ray_origin;
-                if (cam.defocus_angle <= 0) {
-                    ray_origin = cam.position;
-                } else {
-                    V3f p = v3f_random_in_unit_disk();
-                    ray_origin = v3f_add(
-                        cam.position, v3f_add(v3f_mulf(defocus_disk_u, p.x),
-                                              v3f_mulf(defocus_disk_v, p.y)));
-                }
-                Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position)};
-                ray.dirslen = v3f_slength(ray.direction);
-                ray.inv_dir = v3f_inv(ray.direction);
-                colour = v3f_add(
-                    ray_colour(&ray, scene, state->max_depth, &ray_count),
-                    colour);
-            }
-
-            state->image[j * width + i] =
-                pack_colour(v3f_mulf(colour, colour_contribution));
+    int count = 0;
+    for (int j = 0; j < height; j += TILE_HEIGHT) {
+        for (int i = 0; i < width; i += TILE_WIDTH) {
+            tiles[count++] = (Tile){
+                .x = i,
+                .y = j,
+                .tw = (i + TILE_WIDTH > width) ? (width - i) : TILE_WIDTH,
+                .th = (j + TILE_HEIGHT > height) ? (height - j) : TILE_HEIGHT};
         }
     }
+
+    const float colour_contribution = 1.0f / state->samples_per_pixel;
+
+    Work work = {
+        .scene = *scene,
+        .tile_count = tile_count,
+        .tiles = tiles,
+        .tile_finished = 0,
+
+        .image = state->image,
+        .ray_count = 0,
+
+        .width = width,
+        .samples_per_pixel = state->samples_per_pixel,
+        .max_depth = state->max_depth,
+
+        .pixel00_loc = pixel00_loc,
+        .pixel_delta_u = pixel_delta_u,
+        .pixel_delta_v = pixel_delta_v,
+        .defocus_disk_u = defocus_disk_u,
+        .defocus_disk_v = defocus_disk_v,
+        .colour_contribution = colour_contribution,
+    };
+
+    struct timeval start, end, diff;
+    gettimeofday(&start, NULL);
+
+    const int thread_count = 5;
+    Log(Log_Info, temp_sprintf("Running over %d threads", thread_count));
+    pthread_t thread[thread_count];
+    for (int i = 0; i < thread_count; i++) {
+        pthread_create(&thread[i], NULL, render_tile, &work);
+    }
+
+    for (int i = 0; i < thread_count; i++) {
+        pthread_join(thread[i], NULL);
+    }
+
+    int ray_count = work.ray_count;
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
 

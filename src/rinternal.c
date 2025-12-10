@@ -17,8 +17,8 @@ void set_face_normal(const Ray *r, const V3f *norm, HitRecord *record) {
 
 long prim_hitc = 0;
 long aabb_hitc = 0;
-static inline bool sphere_hit(const Hittable *hittable, const Ray *ray,
-                              float tmin, float tmax, HitRecord *record) {
+static bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                       float tmax, HitRecord *record) {
     prim_hitc++;
     const Sphere *sphere = hittable->data;
     V3f oc = v3f_sub(sphere->center, ray->origin);
@@ -46,8 +46,8 @@ static inline bool sphere_hit(const Hittable *hittable, const Ray *ray,
     return true;
 }
 
-static inline bool plane_hit(const Hittable *hittable, const Ray *ray,
-                             float tmin, float tmax, HitRecord *record) {
+static bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                      float tmax, HitRecord *record) {
     prim_hitc++;
     const Plane *plane = hittable->data;
     const float nd = v3f_dot(plane->normal, ray->direction);
@@ -65,8 +65,8 @@ static inline bool plane_hit(const Hittable *hittable, const Ray *ray,
     return true;
 }
 
-static inline bool triangle_hit(const Hittable *hittable, const Ray *ray,
-                                float tmin, float tmax, HitRecord *record) {
+static bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                         float tmax, HitRecord *record) {
     prim_hitc++;
     const Triangle *tr = hittable->data;
     V3f pvec = v3f_cross(ray->direction, tr->e2);
@@ -94,8 +94,8 @@ static inline bool triangle_hit(const Hittable *hittable, const Ray *ray,
     return true;
 }
 
-static inline bool quad_hit(const Hittable *hittable, const Ray *ray,
-                            float tmin, float tmax, HitRecord *record) {
+static bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin,
+                     float tmax, HitRecord *record) {
     prim_hitc++;
     const Quad *quad = hittable->data;
     const float nd = v3f_dot(quad->normal, ray->direction);
@@ -120,8 +120,8 @@ static inline bool quad_hit(const Hittable *hittable, const Ray *ray,
     return true;
 }
 
-static inline bool aabb_hit(const Hittable *h, const Ray *r, float tmin,
-                            float tmax, HitRecord *rec) {
+static bool aabb_hit(const Hittable *h, const Ray *r, float tmin, float tmax,
+                     HitRecord *rec) {
     aabb_hitc++;
     const BVH_Node *node = h->data;
     const AABB box = h->box;

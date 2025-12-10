@@ -52,7 +52,7 @@ bool dielectric_scatter(const Material *mat, const HitRecord *rec,
 
     bool can_refract = ri * sint <= 1.0;
     V3f direction;
-    if (can_refract && reflectance(cost, ri) < randf()) {
+    if (can_refract && reflectance(cost, ri) < rng_f32_tls()) {
         direction = v3f_refract(norm_direction, rec->normal, ri);
     } else {
         direction = v3f_reflect(norm_direction, rec->normal);

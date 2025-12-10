@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -14,6 +15,24 @@
 
 #ifdef _cplusplus
 extern "C" {
+#endif
+
+#ifndef UTILS_DEF
+#define UTILS_DEF static inline
+#endif
+
+#ifdef UTILS_IMPLEMENTATION
+#define UTILS_EXTERN
+#else
+#define UTILS_EXTERN extern
+#endif
+
+#if defined(_MSC_VER)
+#define UTILS_TLS __declspec(thread)
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#define UTILS_TLS _Thread_local
+#else
+#define UTILS_TLS __thread
 #endif
 
 // ----------------------------------------------------------------------------
@@ -32,11 +51,11 @@ enum Log_Level {
 static enum Log_Level _base_log_level = Log_Trace;
 static FILE *_log_output_file = NULL;
 
-static inline void Log_set_level(enum Log_Level level) {
+UTILS_DEF void Log_set_level(enum Log_Level level) {
     _base_log_level = level;
 }
 
-static inline int Log_set_out_file(const char *out_file) {
+UTILS_DEF int Log_set_out_file(const char *out_file) {
     if (_log_output_file != NULL) {
         fclose(_log_output_file);  // Close the previous log file if it was open
     }
@@ -114,7 +133,7 @@ void Log(enum Log_Level level, const char *message);
 
 #define UNUSED(x) (void)(x)
 
-static inline char *shift(int *argc, char ***argv) {
+UTILS_DEF char *shift(int *argc, char ***argv) {
     ASSERT(*argc > 0);
     (*argc)--;
     return *((*argv)++);
@@ -122,7 +141,7 @@ static inline char *shift(int *argc, char ***argv) {
 
 char *generate_uuid();
 
-static inline void timersub(const struct timeval *a, const struct timeval *b,
+UTILS_DEF void timersub(const struct timeval *a, const struct timeval *b,
                             struct timeval *result) {
     result->tv_sec = a->tv_sec - b->tv_sec;
     result->tv_usec = a->tv_usec - b->tv_usec;
@@ -158,12 +177,12 @@ static inline void timersub(const struct timeval *a, const struct timeval *b,
         (_i == _x) ? _i : (_x > 0 ? _i : _i - 1); \
     })
 
-static inline float lerp_float(float start, float end, float t) {
+UTILS_DEF float lerp_float(float start, float end, float t) {
     return start + t * (end - start);
 }
 
 #define CLAMP_TYPE(type)                                        \
-    static inline type clamp_##type(type v, type lo, type hi) { \
+    UTILS_DEF type clamp_##type(type v, type lo, type hi) { \
         const type _v = (v);                                    \
         const type _lo = (lo);                                  \
         const type _hi = (hi);                                  \
@@ -175,7 +194,7 @@ static inline float lerp_float(float start, float end, float t) {
 CLAMP_TYPE(int)
 CLAMP_TYPE(float)
 
-static inline bool is_number(const char *s) {
+UTILS_DEF bool is_number(const char *s) {
     if (s == NULL || *s == '\0') return false;
 
     if (*s == '-') s++;
@@ -189,7 +208,7 @@ static inline bool is_number(const char *s) {
 
 // warn: no modulus: wrap when just went beyond boundary
 #define WRAP_TYPE(type)                                              \
-    static inline type wrap_##type(type value, type min, type max) { \
+    UTILS_DEF type wrap_##type(type value, type min, type max) { \
         const type _v = (value);                                     \
         const type _min = (min);                                     \
         const type _max = (max);                                     \
@@ -203,24 +222,56 @@ WRAP_TYPE(int)
 WRAP_TYPE(float)
 WRAP_TYPE(double)
 
-static inline float randf() { return rand() / (RAND_MAX + 1.0); }
+typedef struct RNG {
+    uint32_t state;
+} RNG;
 
-static inline float randf_range(float min, float max) {
-    return min + (max - min) * randf();
+UTILS_TLS static RNG rng_state = (RNG){0x12345678u};
+
+UTILS_DEF void rng_seed(RNG *rng, uint32_t seed) {
+    rng->state = seed ? seed : 0x12345678u;
+}
+UTILS_DEF void rng_seed_tls(uint32_t seed) {
+    rng_state = (RNG){seed ? seed : 0x12345678u};
 }
 
-static inline int randi_range(int min, int max) {
-    return (int)randf_range(min, max + 1);
+UTILS_DEF uint32_t rng_u32(RNG *rng) {
+    uint32_t x = rng->state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    rng->state = x;
+    return x;
+}
+UTILS_DEF uint32_t rng_u32_tls() { return rng_u32(&rng_state); }
+
+UTILS_DEF float rng_f32(RNG *rng) {
+    return (rng_u32(rng) >> 8) * (1.0f / 16777216.0f);
+}
+UTILS_DEF float rng_f32_tls() { return rng_f32(&rng_state); }
+
+UTILS_DEF float rngf_range(RNG *rng, float min, float max) {
+    return min + (max - min) * rng_f32(rng);
+}
+UTILS_DEF float rngf_range_tls(float min, float max) {
+    return rngf_range(&rng_state, min, max);
+}
+
+UTILS_DEF int rngi_range(RNG *rng, int min, int max) {
+    return (int)rngf_range(rng, min, max + 1);
+}
+UTILS_DEF int rngi_range_tls(int min, int max) {
+    return rngi_range(&rng_state, min, max);
 }
 
 int calculate_infix(const char *expr);  // 34+5*10+3 -> 88 just +-*/%
 
-static inline float triangle_area_float(float x1, float y1, float x2, float y2,
+UTILS_DEF float triangle_area_float(float x1, float y1, float x2, float y2,
                                         float x3, float y3) {
     return fabs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0);
 }
 
-static inline bool triangle_is_inside(float x1, float y1, float x2, float y2,
+UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
                                       float x3, float y3, float x, float y) {
     float A = triangle_area_float(x1, y1, x2, y2, x3, y3);
     float A1 = triangle_area_float(x, y, x2, y2, x3, y3);

@@ -108,6 +108,7 @@ int main(int argc, char **argv) {
                              temp_sprintf("Unknown option '%s'", flag));
         }
     }
+    UNUSED(master_ip);
 
     Scene *scene = malloc(sizeof(Scene));
     memset(scene, 0, sizeof(Scene));

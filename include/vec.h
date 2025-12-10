@@ -12,6 +12,10 @@
 extern "C" {
 #endif
 
+#ifndef VECDEF
+#define VECDEF static inline
+#endif
+
 #define EPS 1e-8
 
 typedef struct {
@@ -19,8 +23,6 @@ typedef struct {
 } V3f;
 
 #define ORIGIN (V3f){0, 0, 0}
-
-#define VECDEF static inline
 
 VECDEF float v3f_slength(V3f vec) {
     return vec.x * vec.x + vec.y * vec.y + vec.z * vec.z;
@@ -80,11 +82,13 @@ VECDEF V3f v3f_clamp(V3f a, float min, float max) {
                  clamp_float(a.z, min, max)};
 }
 
-VECDEF V3f v3f_random() { return (V3f){randf(), randf(), randf()}; }
+VECDEF V3f v3f_random() {
+    return (V3f){rng_f32_tls(), rng_f32_tls(), rng_f32_tls()};
+}
 
 VECDEF V3f v3f_random_range(float min, float max) {
-    return (V3f){randf_range(min, max), randf_range(min, max),
-                 randf_range(min, max)};
+    return (V3f){rngf_range_tls(min, max), rngf_range_tls(min, max),
+                 rngf_range_tls(min, max)};
 }
 
 // TODO: find better way for random vector on sphere
@@ -100,7 +104,7 @@ VECDEF V3f v3f_random_unit() {
 
 VECDEF V3f v3f_random_in_unit_disk() {
     while (true) {
-        V3f p = (V3f){randf_range(-1, 1), randf_range(-1, 1), 0};
+        V3f p = (V3f){rngf_range_tls(-1, 1), rngf_range_tls(-1, 1), 0};
         if (v3f_slength(p) < 1) return p;
     }
 }
