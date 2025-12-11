@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #include "imagerw.h"
 #include "renderer.h"
@@ -119,8 +118,6 @@ int main(int argc, char **argv) {
     state->max_depth = 10;
     load_scene(scene_json_file, scene, state);
     print_summary(scene, state);
-
-    srand(time(NULL));
 
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);

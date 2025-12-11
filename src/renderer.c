@@ -4,7 +4,6 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <sys/time.h>
 
 #include "common.h"
@@ -191,7 +190,7 @@ void render_scene(Scene *scene, State *state) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 
-    const int thread_count = 5;
+    const int thread_count = 1;
     Log(Log_Info, temp_sprintf("Running over %d threads", thread_count));
     pthread_t thread[thread_count];
     for (int i = 0; i < thread_count; i++) {

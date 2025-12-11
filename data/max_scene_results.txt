@@ -10,7 +10,7 @@ No BVH just Hittable abstraction:
 [INFO] export_image: Successfully written data/max_scene.ppm
 
 Rays:           ~1.664B
-Primitive hits: 2.859T   (≈ 2.8 trillion)
+Primitive hits: 2.859T
 Time:           16206 sec  (270 minutes)
 Cost:           0.009738 ms/ray
 
@@ -27,7 +27,25 @@ With BVH:
 [INFO] Rendered 1664667338 rays in 5965940ms or 0.003584ms/ray, Total hits: primitive 118078311251, aabb 1053166046329
 
 Rays:           ~1.664B
-Primitive hits: 118B     (≈ 118 billion)
-AABB hits:      1.053T    (≈ 1 trillion)
+Primitive hits: 118B
+AABB hits:      1.053T
 Time:           5965 sec  (99 minutes)
 Cost:           0.003584 ms/ray
+
+With tiles, additional thread and better RNG func:
+[INFO] load_scene: Loaded data/max_scene.json in 1.304000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 300 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 80 triangles
+[INFO] load_scene: Loaded 100 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 2040 tiles
+[INFO] Running over 1 threads
+[INFO] Rendered 1664796781 rays in 4723915ms or 0.002838ms/ray, Total hits: primitive 116599962902, aabb 1051399557631
+
+Rays:           ~1.664B
+Primitive hits: 116B   
+AABB hits:      1.051T
+Time:           4723 sec  (79 minutes)
+Cost:           0.002838 ms/ray
