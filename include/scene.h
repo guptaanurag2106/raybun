@@ -35,11 +35,6 @@ typedef struct {
     Camera camera;
 } Scene;
 
-typedef struct {
-    Scene scene;  // world/scene, camera details (constants)
-    State state;  // current image etc.
-} JSON;
-
 void load_scene(const char *scene_file, Scene *scene, State *state);
 void print_summary(const Scene *scene, const State *state);
 void free_scene(Scene *scene);

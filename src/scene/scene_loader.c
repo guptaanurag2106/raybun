@@ -457,7 +457,8 @@ END_PARSE:
     scene->objects = hv.hs;
     scene->bvh_root = construct_bvh(scene->objects, 0, scene->obj_count);
 
-    state->image = malloc(state->width * state->height * sizeof(uint32_t));
+    state->image =
+        aligned_alloc(64, state->width * state->height * sizeof(uint32_t));
     if (!state->image)
         fatal(temp_sprintf("load_scene: image alloc failed: %s",
                            strerror(errno)));

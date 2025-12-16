@@ -1,5 +1,7 @@
 #include "rinternal.h"
 
+#include <stdatomic.h>
+
 #include "aabb.h"
 #include "common.h"
 #include "scene.h"
@@ -14,12 +16,9 @@ void set_face_normal(const Ray *r, const V3f *norm, HitRecord *record) {
     record->front_face = v3f_dot(r->direction, *norm) < 0;
     record->normal = record->front_face ? *norm : v3f_neg(*norm);
 }
-
-long prim_hitc = 0;
-long aabb_hitc = 0;
+// No global non-atomic counters here; use TLS + atomic totals.
 static bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
                        float tmax, HitRecord *record) {
-    prim_hitc++;
     const Sphere *sphere = hittable->data;
     V3f oc = v3f_sub(sphere->center, ray->origin);
     float a = v3f_slength(ray->direction);
@@ -48,7 +47,6 @@ static bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
 
 static bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin,
                       float tmax, HitRecord *record) {
-    prim_hitc++;
     const Plane *plane = hittable->data;
     const float nd = v3f_dot(plane->normal, ray->direction);
     if (nd > -EPS && nd < EPS) return false;
@@ -67,7 +65,6 @@ static bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin,
 
 static bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
                          float tmax, HitRecord *record) {
-    prim_hitc++;
     const Triangle *tr = hittable->data;
     V3f pvec = v3f_cross(ray->direction, tr->e2);
     float det = v3f_dot(tr->e1, pvec);
@@ -96,7 +93,6 @@ static bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
 
 static bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin,
                      float tmax, HitRecord *record) {
-    prim_hitc++;
     const Quad *quad = hittable->data;
     const float nd = v3f_dot(quad->normal, ray->direction);
     if (nd > -EPS && nd < EPS) return false;  // no parallel rays
@@ -122,7 +118,6 @@ static bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin,
 
 static bool aabb_hit(const Hittable *h, const Ray *r, float tmin, float tmax,
                      HitRecord *rec) {
-    aabb_hitc++;
     const BVH_Node *node = h->data;
     const AABB box = h->box;
     const V3f *origin = &(r->origin);
@@ -212,6 +207,3 @@ Hittable make_hittable_quad(Quad *q) {
 Hittable make_hittable_bvh(BVH_Node *node, AABB box) {
     return (Hittable){.hit = aabb_hit, .data = node, .box = box};
 }
-
-long get_prim_hitc() { return prim_hitc; }
-long get_aabb_hitc() { return aabb_hitc; }

@@ -1,5 +1,4 @@
 #pragma once
-#include <stdlib.h>
 
 #include "common.h"
 #include "rinternal.h"

@@ -49,3 +49,42 @@ Primitive hits: 116B
 AABB hits:      1.051T
 Time:           4723 sec  (79 minutes)
 Cost:           0.002838 ms/ray
+
+
+Multithreading, with smaller scenes
+6 threads: 
+[INFO] load_scene: Loaded data/max_scene.json in 0.274000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 30 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 10 triangles
+[INFO] load_scene: Loaded 60 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 510 tiles
+[INFO] Running over 6 threads
+[INFO] Rendered 486450910 rays in 454842ms or 0.000935ms/ray
+
+3 threads:
+[INFO] load_scene: Loaded data/max_scene.json in 0.196000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 30 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 10 triangles
+[INFO] load_scene: Loaded 60 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 510 tiles
+[INFO] Running over 3 threads
+[INFO] Rendered 486430317 rays in 545059ms or 0.001121ms/ray
+
+1 thread:
+[INFO] load_scene: Loaded data/max_scene.json in 0.198000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 30 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 10 triangles
+[INFO] load_scene: Loaded 60 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 510 tiles
+[INFO] Running over 1 threads
+[INFO] Rendered 486437579 rays in 1227039ms or 0.002523ms/ray
+[INFO] export_image: Successfully written data/max_scene.ppm

@@ -1,10 +1,13 @@
 #include "renderer.h"
 
+#include <malloc.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include "common.h"
 #include "rinternal.h"
@@ -37,7 +40,7 @@ void calculate_camera_fields(Camera *cam) {
 }
 
 const Colour BACKGROUND = {0.1, 0.1, 0.1};
-Colour ray_colour(Ray *ray, Scene *scene, int depth, int *ray_count) {
+Colour ray_colour(Ray *ray, const Scene *scene, int depth, int *ray_count) {
     (*ray_count)++;
     if (depth <= 0) return (Colour){0, 0, 0};
     HitRecord record = {0};
@@ -69,8 +72,8 @@ Colour ray_colour(Ray *ray, Scene *scene, int depth, int *ray_count) {
 
 void *render_tile(void *arg) {
     Work *work = arg;
-    Scene scene = work->scene;
-    Camera cam = scene.camera;
+    const Scene *scene = work->scene;
+    Camera cam = scene->camera;
 
     int ray_count = 0;
     int curr_tile;
@@ -81,18 +84,26 @@ void *render_tile(void *arg) {
         if (curr_tile >= work->tile_count) break;
 
         Tile tile = work->tiles[curr_tile];
+        V3f row_start = v3f_add(work->pixel00_loc,
+                                v3f_add(v3f_mulf(work->pixel_delta_u, tile.x),
+                                        v3f_mulf(work->pixel_delta_v, tile.y)));
 
         for (int j = tile.y; j < tile.y + tile.th; j++) {
             for (int i = tile.x; i < tile.x + tile.tw; i++) {
                 Colour colour = (V3f){0, 0, 0};
 
+                V3f pixel_base = v3f_add(
+                    row_start,
+                    v3f_add(v3f_mulf(work->pixel_delta_u, (i - tile.x)),
+                            v3f_mulf(work->pixel_delta_v, (j - tile.y))));
+
                 for (int s = 0; s < work->samples_per_pixel; s++) {
-                    V3f pixel_center =
-                        v3f_add(work->pixel00_loc,
-                                v3f_add(v3f_mulf(work->pixel_delta_u,
-                                                 i + rng_f32_tls() - 0.5),
-                                        v3f_mulf(work->pixel_delta_v,
-                                                 j + rng_f32_tls() - 0.5)));
+                    V3f pixel_center = v3f_add(
+                        pixel_base, v3f_add(v3f_mulf(work->pixel_delta_u,
+                                                     rng_f32_tls() - 0.5f),
+                                            v3f_mulf(work->pixel_delta_v,
+                                                     rng_f32_tls() - 0.5f)));
+
                     V3f ray_origin;
                     if (cam.defocus_angle <= 0) {
                         ray_origin = cam.position;
@@ -106,7 +117,7 @@ void *render_tile(void *arg) {
                     Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position)};
                     ray.inv_dir = v3f_inv(ray.direction);
                     colour = v3f_add(
-                        ray_colour(&ray, &scene, work->max_depth, &ray_count),
+                        ray_colour(&ray, scene, work->max_depth, &ray_count),
                         colour);
                 }
                 work->image[j * work->width + i] =
@@ -143,6 +154,9 @@ void render_scene(Scene *scene, State *state) {
     V3f defocus_disk_u = v3f_mulf(cam.right, defocus_radius);
     V3f defocus_disk_v = v3f_mulf(cam.up, defocus_radius);
 
+#define TILE_WIDTH width
+#define TILE_HEIGHT 128
+
     const int tile_count =
         CEILF((float)width / TILE_WIDTH) * CEILF((float)height / TILE_HEIGHT);
 
@@ -167,7 +181,7 @@ void render_scene(Scene *scene, State *state) {
     const float colour_contribution = 1.0f / state->samples_per_pixel;
 
     Work work = {
-        .scene = *scene,
+        .scene = scene,
         .tile_count = tile_count,
         .tiles = tiles,
         .tile_finished = 0,
@@ -190,11 +204,17 @@ void render_scene(Scene *scene, State *state) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 
-    const int thread_count = 1;
+    // int cores = sysconf(_SC_NPROCESSORS_ONLN);
+    // int thread_count = MAX(1, cores - 1);
+    int thread_count = 6;
     Log(Log_Info, temp_sprintf("Running over %d threads", thread_count));
     pthread_t thread[thread_count];
     for (int i = 0; i < thread_count; i++) {
         pthread_create(&thread[i], NULL, render_tile, &work);
+        // cpu_set_t set;
+        // CPU_ZERO(&set);
+        // CPU_SET(i, &set);
+        // pthread_setaffinity_np(thread[i], sizeof(set), &set);
     }
 
     for (int i = 0; i < thread_count; i++) {
@@ -208,8 +228,6 @@ void render_scene(Scene *scene, State *state) {
     float ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
     double time_per_ray = ms / ray_count;
 
-    Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray, Total "
-                               "hits: primitive %ld, aabb %ld",
-                               ray_count, (long int)ms, time_per_ray,
-                               get_prim_hitc(), get_aabb_hitc()));
+    Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray",
+                               ray_count, (long int)ms, time_per_ray));
 }

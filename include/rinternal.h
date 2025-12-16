@@ -14,8 +14,3 @@ bool scene_hit(const Ray *r, const Scene *scene, float tmin, float tmax,
 
 bool scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
              Colour *attenuation, Ray *ray_out);
-
-extern long prim_hitc;
-extern long aabb_hitc;
-long get_prim_hitc();
-long get_aabb_hitc();
