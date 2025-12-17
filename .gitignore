@@ -2,5 +2,6 @@
 build/
 compile_commands.json
 output.ppm
+thirdparty/cJSON-1.7.19/build/
 
 .vscode
