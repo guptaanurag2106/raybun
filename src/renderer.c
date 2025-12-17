@@ -207,6 +207,7 @@ void render_scene(Scene *scene, State *state) {
     // int cores = sysconf(_SC_NPROCESSORS_ONLN);
     // int thread_count = MAX(1, cores - 1);
     int thread_count = 6;
+    // TODO: thread pinning, automatically get thread count
     Log(Log_Info, temp_sprintf("Running over %d threads", thread_count));
     pthread_t thread[thread_count];
     for (int i = 0; i < thread_count; i++) {
