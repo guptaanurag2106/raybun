@@ -183,27 +183,35 @@ Hittable make_hittable_sphere(Sphere *s) {
         .zmin = s->center.z - r,
         .zmax = s->center.z + r,
     };
-    return (Hittable){.hit = sphere_hit, .data = s, .box = aabb};
+    return (Hittable){
+        .hit = sphere_hit, .box = aabb, .type = HITTABLE_PRIMITIVE, .data = s};
 }
 
 Hittable make_hittable_plane(Plane *p) {
     // TODO: no bounding box
-    return (Hittable){.hit = plane_hit, .data = p, .box = {0}};
+    return (Hittable){
+        .hit = plane_hit, .box = {0}, .type = HITTABLE_PRIMITIVE, .data = p};
 }
 
 Hittable make_hittable_triangle(Triangle *t) {
     AABB box1 = aabb(t->p1, t->p2);
     AABB box2 = aabb(t->p2, t->p3);
-    return (Hittable){
-        .hit = triangle_hit, .data = t, .box = aabb_join(box1, box2)};
+    return (Hittable){.hit = triangle_hit,
+                      .box = aabb_join(box1, box2),
+                      .type = HITTABLE_PRIMITIVE,
+                      .data = t};
 }
 
 Hittable make_hittable_quad(Quad *q) {
     AABB box1 = aabb(q->corner, v3f_add(q->corner, v3f_add(q->u, q->v)));
     AABB box2 = aabb(v3f_add(q->corner, q->u), v3f_add(q->corner, q->v));
-    return (Hittable){.hit = quad_hit, .data = q, .box = aabb_join(box1, box2)};
+    return (Hittable){.hit = quad_hit,
+                      .box = aabb_join(box1, box2),
+                      .type = HITTABLE_PRIMITIVE,
+                      .data = q};
 }
 
 Hittable make_hittable_bvh(BVH_Node *node, AABB box) {
-    return (Hittable){.hit = aabb_hit, .data = node, .box = box};
+    return (Hittable){
+        .hit = aabb_hit, .box = box, .type = HITTABLE_BVH, .data = node};
 }

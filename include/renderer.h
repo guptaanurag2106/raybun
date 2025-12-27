@@ -5,6 +5,9 @@
 #include "scene.h"
 
 typedef V3f Colour;
+
+#define TILE_WIDTH 64
+#define TILE_HEIGHT 64
 typedef struct {
     int x, y;
     int tw, th;
@@ -13,17 +16,16 @@ typedef struct {
 typedef struct {
     _Atomic long ray_count;
     _Atomic int tile_finished;
-    char _pad[64 - sizeof(_Atomic long) - sizeof(_Atomic int)];
+
+    int width;
+    int samples_per_pixel;
+    int max_depth;
 
     const Scene *scene;
     const int tile_count;
     const Tile *tiles;
 
     uint32_t *image;
-
-    int width;
-    int samples_per_pixel;
-    int max_depth;
 
     const V3f pixel00_loc;
     const V3f pixel_delta_u, pixel_delta_v;
@@ -32,4 +34,4 @@ typedef struct {
 } Work;  // sent to individual thread
 
 void calculate_camera_fields(Camera *cam);
-void render_scene(Scene *scene, State *state);
+void render_scene(Scene *scene, State *state, int thread_count);

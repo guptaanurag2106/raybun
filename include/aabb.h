@@ -4,6 +4,8 @@
 #include "rinternal.h"
 #include "vec.h"
 
+#define AABB_DELTA 0.0001f
+
 static inline AABB aabb(const V3f a, const V3f b) {
     const float xmin = MIN(a.x, b.x);
     const float xmax = MAX(a.x, b.x);
@@ -12,7 +14,7 @@ static inline AABB aabb(const V3f a, const V3f b) {
     const float zmin = MIN(a.z, b.z);
     const float zmax = MAX(a.z, b.z);
 
-    const float delta = 0.0001;
+    const float delta = AABB_DELTA;
 
     return (AABB){
         .xmin = (xmax - xmin) < delta ? xmin - delta / 2 : xmin,

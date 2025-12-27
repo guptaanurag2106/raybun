@@ -1,9 +1,9 @@
 {
   "config": {
-    "width": 1080,
-    "height": 1080,
-    "samples_per_pixel": 50,
-    "max_depth": 50
+    "width": 720,
+    "height": 720,
+    "samples_per_pixel": 100,
+    "max_depth": 100
   },
   "camera": {
     "position": [0, 0, 80],
@@ -17,7 +17,8 @@
 
   "objects": {
     "sphere": [
-      { "center": [50, 0, -50], "radius": 20, "material": 1 }
+      { "center": [50, 40, -50], "radius": 20, "material": 1},
+      { "center": [50, -40, -50], "radius": 20, "material": 0 }
     ],
 
     "plane": [
@@ -37,13 +38,13 @@
 
     "boxes": [
         {
-            "a": [-30, -120, -140],
-            "b": [-90, 20, -200],
+            "a": [-60, -120, -140],
+            "b": [-120, 20, -200],
             "material": 2
         },
         {
-            "a": [-40, -120, -120],
-            "b": [0, -20, -80],
+            "a": [-70, -120, -120],
+            "b": [-30, -20, -80],
             "material": 2
         }
     ]

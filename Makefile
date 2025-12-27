@@ -76,8 +76,8 @@ max_scene_gen:
 
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -rf $(CJSON_BUILD)
-	rm -rf $(MHD_BUILD)
+	# rm -rf $(CJSON_BUILD)
+	# rm -rf $(MHD_BUILD)
 
 .PHONY: all clean debug release max_scene_gen
 

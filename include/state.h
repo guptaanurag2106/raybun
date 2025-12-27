@@ -10,3 +10,9 @@ typedef struct {
 
     uint32_t *image;
 } State;
+
+typedef struct {
+    float perf;
+    int thread_count;
+    int simd;  // future use
+} MachineStats;

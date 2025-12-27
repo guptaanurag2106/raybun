@@ -221,20 +221,27 @@ static int parse_triangle(Scene *scene, cJSON *tnode) {
     return 1;
 }
 
-void load_scene(const char *scene_file, Scene *scene, State *state) {
+char *read_compress_scene(const char *scene_file) {
+    char *file = read_entire_file(scene_file);
+    if (!file) fatal("load_scene: Cannot read file.");
+    cJSON_Minify(file);
+    return file;
+}
+
+// TODO: switch to arena allocator
+void load_scene(const char *scene_file_content, Scene *scene, State *state) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 
-    const char *file = read_entire_file(scene_file);
-    if (!file) fatal("load_scene: cannot read file.");
-
-    cJSON *json = cJSON_Parse(file);
-    free((void *)file);
+    cJSON *json = cJSON_Parse(scene_file_content);
 
     if (!json) {
+        const char *indicator =
+            "                                                          ^";
         fatal(temp_sprintf(
-            "load_scene: JSON parse error near: %s",
-            cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() : "unknown"));
+            "load_scene: JSON parse error near: %.30s\n%s",
+            cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() - 15 : "unknown",
+            indicator));
     }
 
     Camera camera = {.position = {0, 0, -5},
@@ -259,8 +266,9 @@ void load_scene(const char *scene_file, Scene *scene, State *state) {
         state->max_depth =
             parse_int(cJSON_GetObjectItemCaseSensitive(config, "max_depth"),
                       "config.max_depth", state->max_depth);
-    } else
-        log_warn("config: not found, using defaults.");
+    } else {
+        fatal("config: not found, using defaults.");
+    }
 
     cJSON *cam = cJSON_GetObjectItemCaseSensitive(json, "camera");
     if (cJSON_IsObject(cam)) {
@@ -455,6 +463,12 @@ END_PARSE:
 
     scene->obj_count = hv.count;
     scene->objects = hv.hs;
+
+    // Transfer ownership: Reset hv so it doesn't point to the same memory
+    hv.hs = NULL;
+    hv.count = 0;
+    hv.capacity = 0;
+
     scene->bvh_root = construct_bvh(scene->objects, 0, scene->obj_count);
 
     state->image =
@@ -468,12 +482,29 @@ END_PARSE:
     timersub(&end, &start, &diff);
     float ms = diff.tv_sec * 100 + diff.tv_usec * 1e-3;
 
-    Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %s in %fms", scene_file, ms));
+    Log(Log_Info, temp_sprintf("load_scene: Loaded scene in %fms", ms));
+}
+
+static void free_hittable(Hittable h) {
+    // Primitives are freed separately
+    if (h.type == HITTABLE_BVH) {
+        BVH_Node *node = h.data;
+        free_hittable(node->left);
+        free_hittable(node->right);
+        free(node);
+    }
 }
 
 void free_scene(Scene *scene) {
     if (!scene) return;
+
+    if (scene->bvh_root.hit) {
+        free_hittable(scene->bvh_root);
+    }
+
+    for (int i = 0; i < scene->obj_count; i++) {
+        free(scene->objects[i].data);
+    }
 
     free(scene->objects);
     scene->objects = NULL;

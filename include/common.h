@@ -101,9 +101,12 @@ typedef bool (*Hitfn)(const Hittable *self, const Ray *r, float tmin,
 
 // typedef bool (*AabbFn)(const Hittable *self, AABB *out_box);
 
+typedef enum { HITTABLE_PRIMITIVE, HITTABLE_BVH } HittableType;
+
 struct Hittable {
     Hitfn hit;
     AABB box;
+    HittableType type;
 
     void *data;
 };

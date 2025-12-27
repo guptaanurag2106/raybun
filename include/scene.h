@@ -35,6 +35,7 @@ typedef struct {
     Camera camera;
 } Scene;
 
-void load_scene(const char *scene_file, Scene *scene, State *state);
+char *read_compress_scene(const char *scene_file);
+void load_scene(const char *scene_file_content, Scene *scene, State *state);
 void print_summary(const Scene *scene, const State *state);
 void free_scene(Scene *scene);

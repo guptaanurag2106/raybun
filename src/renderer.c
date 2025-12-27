@@ -40,7 +40,7 @@ void calculate_camera_fields(Camera *cam) {
 }
 
 const Colour BACKGROUND = {0.1, 0.1, 0.1};
-Colour ray_colour(Ray *ray, const Scene *scene, int depth, int *ray_count) {
+Colour ray_colour(Ray *ray, const Scene *scene, int depth, long *ray_count) {
     (*ray_count)++;
     if (depth <= 0) return (Colour){0, 0, 0};
     HitRecord record = {0};
@@ -75,7 +75,7 @@ void *render_tile(void *arg) {
     const Scene *scene = work->scene;
     Camera cam = scene->camera;
 
-    int ray_count = 0;
+    long ray_count = 0;
     int curr_tile;
     rng_seed_tls((uint32_t)time(NULL) ^ (uint32_t)(uintptr_t)pthread_self());
 
@@ -130,7 +130,7 @@ void *render_tile(void *arg) {
     pthread_exit(NULL);
 }
 
-void render_scene(Scene *scene, State *state) {
+void render_scene(Scene *scene, State *state, int thread_count) {
     const int width = state->width;
     const int height = state->height;
 
@@ -153,9 +153,6 @@ void render_scene(Scene *scene, State *state) {
     float defocus_radius = cam.focus_dist * tanf(cam.defocus_angle / 2);
     V3f defocus_disk_u = v3f_mulf(cam.right, defocus_radius);
     V3f defocus_disk_v = v3f_mulf(cam.up, defocus_radius);
-
-#define TILE_WIDTH width
-#define TILE_HEIGHT 128
 
     const int tile_count =
         CEILF((float)width / TILE_WIDTH) * CEILF((float)height / TILE_HEIGHT);
@@ -204,10 +201,7 @@ void render_scene(Scene *scene, State *state) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 
-    // int cores = sysconf(_SC_NPROCESSORS_ONLN);
-    // int thread_count = MAX(1, cores - 1);
-    int thread_count = 6;
-    // TODO: thread pinning, automatically get thread count
+    // TODO: thread pinning
     Log(Log_Info, temp_sprintf("Running over %d threads", thread_count));
     pthread_t thread[thread_count];
     for (int i = 0; i < thread_count; i++) {
@@ -222,13 +216,13 @@ void render_scene(Scene *scene, State *state) {
         pthread_join(thread[i], NULL);
     }
 
-    int ray_count = work.ray_count;
+    long ray_count = work.ray_count;
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
 
-    float ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
+    double ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
     double time_per_ray = ms / ray_count;
 
-    Log(Log_Info, temp_sprintf("Rendered %d rays in %ldms or %fms/ray",
+    Log(Log_Info, temp_sprintf("Rendered %ld rays in %ldms or %fms/ray",
                                ray_count, (long int)ms, time_per_ray));
 }

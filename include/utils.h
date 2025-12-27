@@ -51,9 +51,7 @@ enum Log_Level {
 static enum Log_Level _base_log_level = Log_Trace;
 static FILE *_log_output_file = NULL;
 
-UTILS_DEF void Log_set_level(enum Log_Level level) {
-    _base_log_level = level;
-}
+UTILS_DEF void Log_set_level(enum Log_Level level) { _base_log_level = level; }
 
 UTILS_DEF int Log_set_out_file(const char *out_file) {
     if (_log_output_file != NULL) {
@@ -142,7 +140,7 @@ UTILS_DEF char *shift(int *argc, char ***argv) {
 char *generate_uuid();
 
 UTILS_DEF void timersub(const struct timeval *a, const struct timeval *b,
-                            struct timeval *result) {
+                        struct timeval *result) {
     result->tv_sec = a->tv_sec - b->tv_sec;
     result->tv_usec = a->tv_usec - b->tv_usec;
     if (result->tv_usec < 0) {
@@ -181,14 +179,14 @@ UTILS_DEF float lerp_float(float start, float end, float t) {
     return start + t * (end - start);
 }
 
-#define CLAMP_TYPE(type)                                        \
+#define CLAMP_TYPE(type)                                    \
     UTILS_DEF type clamp_##type(type v, type lo, type hi) { \
-        const type _v = (v);                                    \
-        const type _lo = (lo);                                  \
-        const type _hi = (hi);                                  \
-        if (_v < _lo) return _lo;                               \
-        if (_v > _hi) return _hi;                               \
-        return _v;                                              \
+        const type _v = (v);                                \
+        const type _lo = (lo);                              \
+        const type _hi = (hi);                              \
+        if (_v < _lo) return _lo;                           \
+        if (_v > _hi) return _hi;                           \
+        return _v;                                          \
     }
 
 CLAMP_TYPE(int)
@@ -207,15 +205,15 @@ UTILS_DEF bool is_number(const char *s) {
 }
 
 // warn: no modulus: wrap when just went beyond boundary
-#define WRAP_TYPE(type)                                              \
+#define WRAP_TYPE(type)                                          \
     UTILS_DEF type wrap_##type(type value, type min, type max) { \
-        const type _v = (value);                                     \
-        const type _min = (min);                                     \
-        const type _max = (max);                                     \
-        if (_max <= _min) return _v;                                 \
-        if (_v < _min) return _v + (_max - _min);                    \
-        if (_v > _max) return _v - (_max - _min);                    \
-        return _v;                                                   \
+        const type _v = (value);                                 \
+        const type _min = (min);                                 \
+        const type _max = (max);                                 \
+        if (_max <= _min) return _v;                             \
+        if (_v < _min) return _v + (_max - _min);                \
+        if (_v > _max) return _v - (_max - _min);                \
+        return _v;                                               \
     }
 
 WRAP_TYPE(int)
@@ -267,12 +265,12 @@ UTILS_DEF int rngi_range_tls(int min, int max) {
 int calculate_infix(const char *expr);  // 34+5*10+3 -> 88 just +-*/%
 
 UTILS_DEF float triangle_area_float(float x1, float y1, float x2, float y2,
-                                        float x3, float y3) {
+                                    float x3, float y3) {
     return fabs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0);
 }
 
 UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
-                                      float x3, float y3, float x, float y) {
+                                  float x3, float y3, float x, float y) {
     float A = triangle_area_float(x1, y1, x2, y2, x3, y3);
     float A1 = triangle_area_float(x, y, x2, y2, x3, y3);
     float A2 = triangle_area_float(x1, y1, x, y, x3, y3);

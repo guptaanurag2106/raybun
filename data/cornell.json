@@ -1,8 +1,8 @@
 {
   "config": {
-    "width": 1080,
-    "height": 1080,
-    "samples_per_pixel": 500,
+    "width": 2160,
+    "height": 2160,
+    "samples_per_pixel": 200,
     "max_depth": 50
   },
   "camera": {
@@ -12,14 +12,18 @@
     "fov": 90,
     "aspect_ratio": "1/1",
     "defocus_angle": 0,
-    "focus_dist": 10.0
+    "focus_dist": 100.0
   },
 
   "objects": {
     "sphere": [
+      { "center": [50, 0, -50], "radius": 20, "material": 6 }
     ],
 
     "plane": [
+    ],
+
+    "triangle": [
     ],
 
     "quad": [
@@ -61,13 +65,10 @@
         }
     ],
 
-    "triangle": [
-    ],
-
     "boxes": [
         {
-            "a": [-40, -120, -140],
-            "b": [-100, 20, -200],
+            "a": [-30, -120, -140],
+            "b": [-90, 20, -200],
             "material": 2
         },
         {
