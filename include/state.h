@@ -15,4 +15,12 @@ typedef struct {
     float perf;
     int thread_count;
     int simd;  // future use
-} MachineStats;
+
+    char *name;
+} MachineInfo;
+
+typedef struct {
+    int worker_count;
+
+    MachineInfo *infos;
+} Workers;

@@ -71,7 +71,7 @@ UTILS_DEF int Log_set_out_file(const char *out_file) {
     return 0;
 }
 
-void Log(enum Log_Level level, const char *message);
+void Log(enum Log_Level level, const char *format, ...);
 
 // ----------------------------------------------------------------------------
 //  General Utils
@@ -322,7 +322,7 @@ void reset_Ivector(Ivector *vector);
 
 #ifdef UTILS_IMPLEMENTATION
 
-void Log(enum Log_Level level, const char *message) {
+void Log(enum Log_Level level, const char *format, ...) {
     if (level < _base_log_level) return;
     FILE *out = stdout;
     if (level >= Log_Warn) out = stderr;
@@ -353,7 +353,12 @@ void Log(enum Log_Level level, const char *message) {
         case Log_None:
             return;
     }
-    fprintf(out, "%s\n", message);
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(out, format, args);
+    va_end(args);
+    fprintf(out, "\n");
 }
 
 char *generate_uuid() {

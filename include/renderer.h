@@ -21,17 +21,18 @@ typedef struct {
     int samples_per_pixel;
     int max_depth;
 
-    const Scene *scene;
-    const int tile_count;
-    const Tile *tiles;
+    Scene *scene;
+    int tile_count;
+    Tile *tiles;
 
     uint32_t *image;
 
-    const V3f pixel00_loc;
-    const V3f pixel_delta_u, pixel_delta_v;
-    const V3f defocus_disk_u, defocus_disk_v;
-    const float colour_contribution;
+    V3f pixel00_loc;
+    V3f pixel_delta_u, pixel_delta_v;
+    V3f defocus_disk_u, defocus_disk_v;
+    float colour_contribution;
 } Work;  // sent to individual thread
 
 void calculate_camera_fields(Camera *cam);
-void render_scene(Scene *scene, State *state, int thread_count);
+void init_work(Scene *scene, State *state, Work *work);
+void render_scene(Work *work, int thread_count);

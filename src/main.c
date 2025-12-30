@@ -3,7 +3,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "api.h"
 #include "imagerw.h"
+#include "libmicrohttpd-1.0.1/src/include/microhttpd.h"
 #include "renderer.h"
 #include "scene.h"
 #include "state.h"
@@ -17,7 +19,7 @@ void usage(const char *prog_name) {
     printf("\nModes:\n");
     printf("  master <port> <scene.json> [optional_output_image_name]\n");
     printf("    Coordinate workers, manage job queue\n");
-    printf("  worker <master_ip:port>\n");
+    printf("  worker <http://master_ip:port> [optional_device_name]\n");
     printf("    Poll for work, render tiles\n");
     printf("  standalone <scene.json> [optional_output_image_name]\n");
     printf("    Render locally (for testing)\n");
@@ -32,7 +34,7 @@ void print_args_error(const char *prog_name, const char *error) {
     exit(1);
 }
 
-MachineStats get_perf_score(const char *perf_json_file) {
+MachineInfo get_device_stats(const char *perf_json_file, char *name) {
     Log_set_level(Log_Warn);
 
     Scene *scene = malloc(sizeof(Scene));
@@ -48,7 +50,9 @@ MachineStats get_perf_score(const char *perf_json_file) {
     gettimeofday(&start, NULL);
 
     calculate_camera_fields(&scene->camera);
-    render_scene(scene, state, 1);  // get single threaded performance
+    Work *work = malloc(sizeof(Work));
+    init_work(scene, state, work);
+    render_scene(work, 1);  // get single threaded performance
 
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
@@ -64,18 +68,24 @@ MachineStats get_perf_score(const char *perf_json_file) {
     else
         perf_score = 10.0 * (1.0 - (ms - tmin) / (tmax - tmin));
 
+    free_scene(scene);
+    Log_set_level(Log_Info);
+
     int thread_count = sysconf(_SC_NPROCESSORS_ONLN);
     int simd = -1;
-    MachineStats stats = {
-        .perf = perf_score, .thread_count = thread_count, .simd = simd};
+    if (name == NULL || strlen(name) == 0) {
+        name = generate_uuid();
+    }
+    MachineInfo stats = {.perf = perf_score,
+                         .thread_count = thread_count,
+                         .simd = simd,
+                         .name = name};
 
-    printf(
-        "Benchmark results: Rendered %s in %.0fms, Performance Score: "
-        "%.2f/10, Thread Count: %d, SIMD type %d.\n",
-        perf_json_file, ms, perf_score, thread_count, simd);
-    free_scene(scene);
-
-    Log_set_level(Log_Info);
+    Log(Log_Info,
+        "Benchmark results for %s: Rendered %s in %.0fms, "
+        "Performance Score: "
+        "%.2f/10, Thread Count: %d, SIMD type %d.",
+        name, perf_json_file, ms, perf_score, thread_count, simd);
     return stats;
 }
 
@@ -88,12 +98,13 @@ int main(int argc, char **argv) {
     }
 
     int mode = 0;
-    char *scene_json_file = "";
+    char *scene_json_file = "data/simple_scene.json";
     char *perf_json_file = "data/benchmark.json";
     char *output_name = "data/simple_scene.ppm";
 
     int port;
-    char *master_ip = "";
+    char *master_url = "";
+    char *device_name = NULL;
 
     while (argc > 0) {
         char *flag = shift(&argc, &argv);
@@ -125,12 +136,13 @@ int main(int argc, char **argv) {
             mode = 0;
         } else if (strncmp(flag, "worker", 6) == 0) {
             if (argc <= 0) {
-                print_args_error(
-                    prog_name,
-                    "subcommand 'worker': expected a master_ip:port");
+                print_args_error(prog_name,
+                                 "subcommand 'worker': expected a "
+                                 "master_ip:port [optional_device_name]");
             }
             perf_json_file = "data/benchmark.json";  // used for benchmark
-            master_ip = shift(&argc, &argv);
+            master_url = shift(&argc, &argv);
+            if (argc > 0) device_name = shift(&argc, &argv);
             mode = 1;
         } else if (strncmp(flag, "standalone", 10) == 0) {
             if (argc <= 0) {
@@ -157,39 +169,80 @@ int main(int argc, char **argv) {
                              temp_sprintf("Unknown option '%s'", flag));
         }
     }
-    UNUSED(master_ip);
+    UNUSED(master_url);
 
-    MachineStats stats = get_perf_score(perf_json_file);
+    MachineInfo stats = get_device_stats(perf_json_file, device_name);
 
     if (mode == 3) {
         exit(0);
     }
 
-    Scene *scene = malloc(sizeof(Scene));
-    memset(scene, 0, sizeof(Scene));
-    State *state = malloc(sizeof(State));
+    Scene *scene = NULL;
+    State *state = NULL;
+    char *scene_json = NULL;
+    if (mode == 0 || mode == 2) {
+        scene = malloc(sizeof(Scene));
+        memset(scene, 0, sizeof(Scene));
+        state = malloc(sizeof(State));
 
-    char *scene_json = read_compress_scene(scene_json_file);
-    unsigned int scene_crc =
-        stbiw__crc32((unsigned char *)scene_json, strlen(scene_json));
+        scene_json = read_compress_scene(scene_json_file);
+        unsigned int scene_crc =
+            stbiw__crc32((unsigned char *)scene_json, strlen(scene_json));
 
-    load_scene(scene_json, scene, state);
-    print_summary(scene, state);
+        load_scene(scene_json, scene, state);
+        scene->scene_crc = scene_crc;
+        scene->scene_json = scene_json;
+        print_summary(scene, state);
+        calculate_camera_fields(&scene->camera);
 
-    struct timeval start, end, diff;
-    gettimeofday(&start, NULL);
+        MasterAPIContext *context = malloc(sizeof(MasterAPIContext));
+        if (!context) return false;
+        context->scene = scene;
+        context->state = state;
+        context->workers = (Workers){.worker_count = 0, .infos = NULL};
 
-    calculate_camera_fields(&scene->camera);
-    int thread_count =
-        stats.thread_count - 1;  // master will run on N-1 threads
-    render_scene(scene, state, thread_count);
+        context->work = malloc(sizeof(Work));
 
-    gettimeofday(&end, NULL);
-    timersub(&end, &start, &diff);
+        init_work(context->scene, context->state, context->work);
+
+        // TODO: better error handling, check async
+        //  Start server before rendering so we can check status/connect
+        if (mode == 0) {
+            bool success = master_start_server(port, context);
+            if (success) {
+                Log(Log_Info, "master_start_server: Started master server");
+            } else {
+                Log(Log_Error,
+                    "master_start_server: Cannot start master server");
+            }
+        }
+
+        // master will run on N-1 threads
+        int thread_count = stats.thread_count - 1;
+        render_scene(context->work, thread_count);
+    }
+
+    if (mode == 1) {
+        bool success = worker_connect("", 1);
+        if (success) {
+            Log(Log_Info, "worker_connect: Connected to master");
+        } else {
+            Log(Log_Error, "worker_connect: Cannot connect to master");
+        }
+    }
 
     // export image for master, and standalone modes
     if (mode == 0 || mode == 2) {
         export_image(output_name, state->image, state->width, state->height);
+    }
+
+    Log(Log_Info, "Press Enter to exit...");
+    getchar();
+    if (master_daemon) {
+        MHD_stop_daemon(master_daemon);
+    }
+    if (worker_daemon) {
+        MHD_stop_daemon(worker_daemon);
     }
 
     free(scene_json);

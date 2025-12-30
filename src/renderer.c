@@ -114,7 +114,8 @@ void *render_tile(void *arg) {
                             v3f_add(v3f_mulf(work->defocus_disk_u, p.x),
                                     v3f_mulf(work->defocus_disk_v, p.y)));
                     }
-                    Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position)};
+                    Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position),
+                               .inv_dir = ORIGIN};
                     ray.inv_dir = v3f_inv(ray.direction);
                     colour = v3f_add(
                         ray_colour(&ray, scene, work->max_depth, &ray_count),
@@ -130,7 +131,7 @@ void *render_tile(void *arg) {
     pthread_exit(NULL);
 }
 
-void render_scene(Scene *scene, State *state, int thread_count) {
+void init_work(Scene *scene, State *state, Work *work) {
     const int width = state->width;
     const int height = state->height;
 
@@ -158,7 +159,7 @@ void render_scene(Scene *scene, State *state, int thread_count) {
         CEILF((float)width / TILE_WIDTH) * CEILF((float)height / TILE_HEIGHT);
 
     Tile *tiles = malloc(sizeof(*tiles) * tile_count);
-    Log(Log_Info, temp_sprintf("Breaking into %d tiles", tile_count));
+    Log(Log_Info, "Breaking into %d tiles", tile_count);
     if (tiles == NULL) {
         Log(Log_Warn, "render_scene: Could not allocate tiles");
         exit(1);
@@ -177,7 +178,7 @@ void render_scene(Scene *scene, State *state, int thread_count) {
 
     const float colour_contribution = 1.0f / state->samples_per_pixel;
 
-    Work work = {
+    *work = (Work){
         .scene = scene,
         .tile_count = tile_count,
         .tiles = tiles,
@@ -197,15 +198,17 @@ void render_scene(Scene *scene, State *state, int thread_count) {
         .defocus_disk_v = defocus_disk_v,
         .colour_contribution = colour_contribution,
     };
+}
 
+void render_scene(Work *work, int thread_count) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 
     // TODO: thread pinning
-    Log(Log_Info, temp_sprintf("Running over %d threads", thread_count));
+    Log(Log_Info, "Running over %d threads", thread_count);
     pthread_t thread[thread_count];
     for (int i = 0; i < thread_count; i++) {
-        pthread_create(&thread[i], NULL, render_tile, &work);
+        pthread_create(&thread[i], NULL, render_tile, work);
         // cpu_set_t set;
         // CPU_ZERO(&set);
         // CPU_SET(i, &set);
@@ -216,13 +219,13 @@ void render_scene(Scene *scene, State *state, int thread_count) {
         pthread_join(thread[i], NULL);
     }
 
-    long ray_count = work.ray_count;
+    long ray_count = work->ray_count;
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
 
     double ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
     double time_per_ray = ms / ray_count;
 
-    Log(Log_Info, temp_sprintf("Rendered %ld rays in %ldms or %fms/ray",
-                               ray_count, (long int)ms, time_per_ray));
+    Log(Log_Info, "Rendered %ld rays in %ldms or %fms/ray", ray_count,
+        (long int)ms, time_per_ray);
 }

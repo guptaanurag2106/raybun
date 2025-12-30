@@ -35,7 +35,7 @@ CFLAGS_DEBUG   = -Wall -Wextra -ggdb -std=c11 -DDEBUG -O0
 
 CFLAGS_RELEASE = -Wall -Wextra -O3 -std=c11 -march=native \
                  -funroll-loops -flto -ffunction-sections \
-                 -fdata-sections -ffast-math
+                 -fdata-sections -ffast-math -DDEBUG
 
 LD_FLAGS = -flto -Wl,--gc-sections $(LD_RPATH)
 

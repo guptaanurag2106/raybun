@@ -13,22 +13,17 @@ void fatal(const char *msg) {
 }
 
 void log_warn(const char *msg) {
-    Log(Log_Warn, temp_sprintf("load_scene: %s", msg));
+    Log(Log_Warn, "load_scene: %s", msg);
 }
 
 void print_summary(const Scene *scene, const State *state) {
-    Log(Log_Info, temp_sprintf("load_scene: Creating image of size %d x %d",
-                               state->width, state->height));
-    Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d spheres", scene->sphere_count));
-    Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d planes", scene->plane_count));
-    Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d triangles", scene->triangle_count));
-    Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d quads", scene->quad_count));
-    Log(Log_Info,
-        temp_sprintf("load_scene: Loaded %d materials", scene->material_count));
+    Log(Log_Info, "load_scene: Creating image of size %d x %d", state->width,
+        state->height);
+    Log(Log_Info, "load_scene: Loaded %d spheres", scene->sphere_count);
+    Log(Log_Info, "load_scene: Loaded %d planes", scene->plane_count);
+    Log(Log_Info, "load_scene: Loaded %d triangles", scene->triangle_count);
+    Log(Log_Info, "load_scene: Loaded %d quads", scene->quad_count);
+    Log(Log_Info, "load_scene: Loaded %d materials", scene->material_count);
 }
 
 // TODO: check what all actually needs to be normalized
@@ -474,15 +469,14 @@ END_PARSE:
     state->image =
         aligned_alloc(64, state->width * state->height * sizeof(uint32_t));
     if (!state->image)
-        fatal(temp_sprintf("load_scene: image alloc failed: %s",
-                           strerror(errno)));
+        fatal("load_scene: image alloc failed: %s");
 
     scene->camera = camera;
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
     float ms = diff.tv_sec * 100 + diff.tv_usec * 1e-3;
 
-    Log(Log_Info, temp_sprintf("load_scene: Loaded scene in %fms", ms));
+    Log(Log_Info, "load_scene: Loaded scene in %fms", ms);
 }
 
 static void free_hittable(Hittable h) {

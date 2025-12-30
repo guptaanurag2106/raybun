@@ -20,6 +20,9 @@ typedef struct {
 } Camera;
 
 typedef struct {
+    unsigned int scene_crc;
+    char *scene_json;
+
     int plane_count;
     int sphere_count;
     int quad_count;
