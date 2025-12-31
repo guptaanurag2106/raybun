@@ -24,22 +24,20 @@ typedef struct {
 
 #define ORIGIN (V3f){0, 0, 0}
 
-VECDEF float v3f_slength(V3f vec) {
-    return vec.x * vec.x + vec.y * vec.y + vec.z * vec.z;
+VECDEF float v3f_slength(V3f a) { return a.x * a.x + a.y * a.y + a.z * a.z; }
+
+VECDEF float v3f_length(V3f a) {
+    return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z);
 }
 
-VECDEF float v3f_length(V3f vec) {
-    return sqrtf(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
+VECDEF bool v3f_near_zero(V3f a) {
+    return (a.x < EPS) && (a.y < EPS) && (a.z < EPS);
 }
 
-VECDEF bool v3f_near_zero(V3f vec) {
-    return (vec.x < EPS) && (vec.y < EPS) && (vec.z < EPS);
-}
-
-VECDEF V3f v3f_normalize(V3f vec) {
-    float len = v3f_length(vec);
-    if (len == 0) return vec;
-    return (V3f){.x = vec.x / len, .y = vec.y / len, .z = vec.z / len};
+VECDEF V3f v3f_normalize(V3f a) {
+    float len = v3f_length(a);
+    if (len == 0) return a;
+    return (V3f){.x = a.x / len, .y = a.y / len, .z = a.z / len};
 }
 
 VECDEF V3f v3f_sub(V3f a, V3f b) {

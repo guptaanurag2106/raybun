@@ -3,6 +3,7 @@
 #include "renderer.h"
 #include "scene.h"
 #include "state.h"
+#include "vec.h"
 
 #define SMALL_THRESHOLD (1024 * 1024)     // 1 MB
 #define MAX_PAYLOAD (64UL * 1024 * 1024)  // 64 MB absolute cap
@@ -23,7 +24,7 @@ typedef struct {
 typedef struct {
     Scene *scene;
     State *state;
-    Workers workers;
+    VECTOR(MachineInfo) workers;
     Work *work;
 } MasterAPIContext;
 
@@ -49,7 +50,6 @@ typedef struct {
 typedef struct {
     char *name;  // worker name
     int tile_id;
-    Tile tile;  // TODO: see tile vs tile_id
     uint32_t *pixels;
 } WorkerResult;
 

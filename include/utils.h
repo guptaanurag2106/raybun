@@ -280,6 +280,73 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
     return (A == A1 + A2 + A3);
 }
 
+#define VECTOR(T)        \
+    struct {             \
+        T *items;        \
+        size_t size;     \
+        size_t capacity; \
+    }
+
+#define vec_init(v)        \
+    do {                   \
+        (v)->items = NULL; \
+        (v)->size = 0;     \
+        (v)->capacity = 0; \
+    } while (0)
+
+#define vec__grow(items, capacity, elem_size)                        \
+    do {                                                             \
+        size_t new_cap = (*(capacity) == 0 ? 1 : (*(capacity) * 2)); \
+        void *new_items = realloc(*(items), new_cap * (elem_size));  \
+        *(items) = new_items;                                        \
+        *(capacity) = new_cap;                                       \
+    } while (0)
+
+#define vec_reserve(v, n)                                            \
+    do {                                                             \
+        (v)->items = realloc((v)->items, (n) * sizeof(*(v)->items)); \
+        (v)->capacity = (n);                                         \
+    } while (0)
+
+#define vec_push(v, value)                                  \
+    do {                                                    \
+        if ((v)->size == (v)->capacity)                     \
+            vec__grow((void **)&(v)->items, &(v)->capacity, \
+                      sizeof((v)->items[0]));               \
+        (v)->items[(v)->size++] = (value);                  \
+    } while (0)
+
+#define vec_get(v, n) (assert((n) < (v)->size), (v)->items[(n)])
+
+#define vec_pop(v) (--(v)->size)
+
+#define vec_back(v) vec_get(v, (v)->size - 1)
+
+#define vec_remove_swap(v, i)                      \
+    do {                                           \
+        (v)->items[i] = (v)->items[(v)->size - 1]; \
+        --(v)->size;                               \
+    } while (0)
+
+#define vec_clear(v) ((v)->size = 0)
+
+#define vec_free(v)        \
+    do {                   \
+        free((v)->items);  \
+        (v)->items = NULL; \
+        (v)->size = 0;     \
+        (v)->capacity = 0; \
+    } while (0)
+
+#define vec_release(v)        \
+    ({                        \
+        void *p = (v)->items; \
+        (v)->items = NULL;    \
+        (v)->size = 0;        \
+        (v)->capacity = 0;    \
+        p;                    \
+    })
+
 // ----------------------------------------------------------------------------
 //  String Utils
 // ----------------------------------------------------------------------------

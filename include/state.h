@@ -18,9 +18,3 @@ typedef struct {
 
     char *name;
 } MachineInfo;
-
-typedef struct {
-    int worker_count;
-
-    MachineInfo *infos;
-} Workers;

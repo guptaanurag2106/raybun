@@ -14,6 +14,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+const enum Log_Level level = Log_Trace;
+
 void usage(const char *prog_name) {
     printf("Usage: %s <mode> [options]\n", prog_name);
     printf("\nModes:\n");
@@ -69,7 +71,7 @@ MachineInfo get_device_stats(const char *perf_json_file, char *name) {
         perf_score = 10.0 * (1.0 - (ms - tmin) / (tmax - tmin));
 
     free_scene(scene);
-    Log_set_level(Log_Info);
+    Log_set_level(level);
 
     int thread_count = sysconf(_SC_NPROCESSORS_ONLN);
     int simd = -1;
@@ -199,7 +201,7 @@ int main(int argc, char **argv) {
         if (!context) return false;
         context->scene = scene;
         context->state = state;
-        context->workers = (Workers){.worker_count = 0, .infos = NULL};
+        vec_init(&context->workers);
 
         context->work = malloc(sizeof(Work));
 
@@ -220,6 +222,7 @@ int main(int argc, char **argv) {
         // master will run on N-1 threads
         int thread_count = stats.thread_count - 1;
         render_scene(context->work, thread_count);
+        vec_free(&context->workers);
     }
 
     if (mode == 1) {

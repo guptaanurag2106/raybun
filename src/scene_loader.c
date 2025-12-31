@@ -12,9 +12,7 @@ void fatal(const char *msg) {
     exit(1);
 }
 
-void log_warn(const char *msg) {
-    Log(Log_Warn, "load_scene: %s", msg);
-}
+void log_warn(const char *msg) { Log(Log_Warn, "load_scene: %s", msg); }
 
 void print_summary(const Scene *scene, const State *state) {
     Log(Log_Info, "load_scene: Creating image of size %d x %d", state->width,
@@ -91,28 +89,9 @@ static Triangle make_triangle(V3f p1, V3f p2, V3f p3, int mat_index) {
                       .mat_index = mat_index};
 }
 
-typedef struct {
-    Hittable *hs;
-    int count;
-    int capacity;
-} HittableVector;
+static VECTOR(Hittable) hv = {0};
 
-static HittableVector hv = {0};
-void ensure_hv_capacity(int need) {
-    if (hv.capacity >= need) return;
-
-    int new_cap = hv.capacity ? hv.capacity * 2 : 16;
-    while (new_cap < need) new_cap *= 2;
-
-    hv.hs = realloc(hv.hs, new_cap * sizeof(Hittable));
-    if (hv.hs == NULL) fatal("load_scene: hv realloc failed");
-    hv.capacity = new_cap;
-}
-
-static void append_hittable(Hittable h) {
-    ensure_hv_capacity(hv.count + 1);
-    hv.hs[hv.count++] = h;
-}
+static void append_hittable(Hittable h) { vec_push(&hv, h); }
 
 static void append_sphere(Scene *scene, Sphere sphere) {
     scene->sphere_count++;
@@ -456,20 +435,15 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
 END_PARSE:
     cJSON_Delete(json);
 
-    scene->obj_count = hv.count;
-    scene->objects = hv.hs;
-
+    scene->obj_count = hv.size;
     // Transfer ownership: Reset hv so it doesn't point to the same memory
-    hv.hs = NULL;
-    hv.count = 0;
-    hv.capacity = 0;
+    scene->objects = vec_release(&hv);
 
     scene->bvh_root = construct_bvh(scene->objects, 0, scene->obj_count);
 
     state->image =
         aligned_alloc(64, state->width * state->height * sizeof(uint32_t));
-    if (!state->image)
-        fatal("load_scene: image alloc failed: %s");
+    if (!state->image) fatal("load_scene: image alloc failed: %s");
 
     scene->camera = camera;
     gettimeofday(&end, NULL);
