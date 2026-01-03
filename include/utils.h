@@ -1,6 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <math.h>
@@ -280,7 +281,7 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
     return (A == A1 + A2 + A3);
 }
 
-#define VECTOR(T)        \
+#define Vector(T)        \
     struct {             \
         T *items;        \
         size_t size;     \
@@ -310,7 +311,7 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
 
 #define vec_push(v, value)                                  \
     do {                                                    \
-        if ((v)->size == (v)->capacity)                     \
+        if ((v)->size >= (v)->capacity)                     \
             vec__grow((void **)&(v)->items, &(v)->capacity, \
                       sizeof((v)->items[0]));               \
         (v)->items[(v)->size++] = (value);                  \
@@ -351,11 +352,11 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
 //  String Utils
 // ----------------------------------------------------------------------------
 #define UTILS_MAX_TEMP_SIZE 1024 * 100
-void combine_charp(const char *str1, const char *str2, char **combined);
-// Will use the utils_static_payload_buffer and reset it everytime its filled
+char *combine_charp(const char *str1, const char *str2);
+// Will use the utils_static_temp_buffer and reset it everytime its filled
 #define COMBINE(separator, ...) \
     combine_strings_with_sep_(separator, __VA_ARGS__, NULL)
-// Will use the utils_static_payload_buffer and reset it everytime its filled,
+// Will use the utils_static_temp_buffer and reset it everytime its filled,
 // last va_arg should be NULL
 char *combine_strings_with_sep_(const char *separator, ...);
 // Will use the utils_static_temp_buffer and reset it everytime its filled
@@ -529,49 +530,66 @@ int calculate_infix(const char *expr) {
 static char utils_static_temp_buffer[UTILS_MAX_TEMP_SIZE];
 static uint32_t utils_static_temp_buffer_pos = 0;
 
-void combine_charp(const char *str1, const char *str2, char **combined) {
-    size_t length = strlen(str1) + strlen(str2) + 1;
-    *combined = (char *)malloc(length);
-
-    if (*combined == NULL) {
-        Log(Log_Error, "combine_charp: Could not allocate buffer");
-        return;
-    }
-
-    strcpy(*combined, str1);
-    strcat(*combined, str2);
+char *combine_charp(const char *str1, const char *str2) {
+    return temp_sprintf("%s%s", str1, str2);
 }
 
 char *combine_strings_with_sep_(const char *separator, ...) {
-    // va_list args;
-    // va_start(args, separator);
-    // const char *str = va_arg(args, const char *);
-    // int count = 0;
-    // while (str != NULL) {
-    //     str = va_arg(args, const char *);
-    //     count++;
-    // }
-    // va_end(args);
-    //
-    // va_start(args, separator);
-    // size_t offset = 0;
-    // str = va_arg(args, const char *);
-    // for (int i = 0; i < count; i++) {
-    //     size_t len = strlen(str);
-    //     memcpy(utils_static_temp_buffer + offset, str, len);
-    //     offset += len;
-    //     if (i < count - 1) {
-    //         memcpy(utils_static_temp_buffer + offset, separator,
-    //                strlen(separator));
-    //         offset += strlen(separator);
-    //     }
-    //
-    //     str = va_arg(args, const char *);
-    // }
-    // va_end(args);
-    // utils_static_temp_buffer[offset] = '\0';
-    TODO("not implemented");
-    return utils_static_temp_buffer;
+    va_list args;
+
+    // Calculate length
+    size_t total_len = 0;
+    size_t sep_len = separator ? strlen(separator) : 0;
+
+    va_start(args, separator);
+    const char *s = va_arg(args, const char *);
+    int count = 0;
+    while (s != NULL) {
+        total_len += strlen(s);
+        s = va_arg(args, const char *);
+        count++;
+    }
+    va_end(args);
+
+    if (count > 0 && separator) {
+        total_len += sep_len * (count - 1);
+    }
+
+    // Check buffer space
+    if (utils_static_temp_buffer_pos + total_len + 1 > UTILS_MAX_TEMP_SIZE) {
+        utils_static_temp_buffer_pos = 0;
+        if (total_len + 1 > UTILS_MAX_TEMP_SIZE) {
+            Log(Log_Error,
+                "combine_strings_with_sep_: String too long for buffer");
+            return NULL;
+        }
+    }
+
+    char *start = utils_static_temp_buffer + utils_static_temp_buffer_pos;
+    char *current = start;
+
+    va_start(args, separator);
+    s = va_arg(args, const char *);
+    int i = 0;
+    while (s != NULL) {
+        size_t len = strlen(s);
+        memcpy(current, s, len);
+        current += len;
+
+        s = va_arg(args, const char *);
+        // Add separator if not the last element
+        if (s != NULL && separator) {
+            memcpy(current, separator, sep_len);
+            current += sep_len;
+        }
+        i++;
+    }
+    va_end(args);
+
+    *current = '\0';
+    utils_static_temp_buffer_pos += (current - start) + 1;
+
+    return start;
 }
 
 char *temp_sprintf(const char *format, ...) {
@@ -583,18 +601,26 @@ char *temp_sprintf(const char *format, ...) {
         Log(Log_Error, "temp_sprintf: vsnprintf returned neg size");
         return NULL;
     }
-    if (utils_static_temp_buffer_pos + n > UTILS_MAX_TEMP_SIZE) {
-        Log(Log_Info, "temp_sprintf: clearing existing buffer");
+
+    if (n + 1 > UTILS_MAX_TEMP_SIZE) {
+        Log(Log_Error, "temp_sprintf: Output too large for buffer");
+        return NULL;
+    }
+
+    if (utils_static_temp_buffer_pos + n + 1 > UTILS_MAX_TEMP_SIZE) {
+        // Log(Log_Info, "temp_sprintf: clearing existing buffer");
         utils_static_temp_buffer_pos = 0;
     }
 
     va_start(args, format);
     vsnprintf(utils_static_temp_buffer + utils_static_temp_buffer_pos,
-              UTILS_MAX_TEMP_SIZE, format, args);
+              UTILS_MAX_TEMP_SIZE - utils_static_temp_buffer_pos, format, args);
     va_end(args);
+
+    char *ret = utils_static_temp_buffer + utils_static_temp_buffer_pos;
     utils_static_temp_buffer_pos += n + 1;
 
-    return utils_static_temp_buffer + (utils_static_temp_buffer_pos - n - 1);
+    return ret;
 }
 
 char *read_entire_file(const char *filename) {

@@ -46,13 +46,13 @@ MachineInfo get_device_stats(const char *perf_json_file, char *name) {
     char *file_content = read_compress_scene(perf_json_file);
     load_scene(file_content, scene, state);
     free(file_content);
-    print_summary(scene, state);
+
+    Work *work = malloc(sizeof(Work));
 
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 
     calculate_camera_fields(&scene->camera);
-    Work *work = malloc(sizeof(Work));
     init_work(scene, state, work);
     render_scene(work, 1);  // get single threaded performance
 
@@ -240,7 +240,7 @@ int main(int argc, char **argv) {
     }
 
     Log(Log_Info, "Press Enter to exit...");
-    getchar();
+    // getchar();
     if (master_daemon) {
         MHD_stop_daemon(master_daemon);
     }

@@ -6,9 +6,9 @@
     "max_depth": 50
   },
   "camera": {
-    "position": [0, 0, 80],
+    "position": [0, -100, 0],
     "look_at": [0, 0, 0],
-    "up": [0, 1, 0],
+    "up": [0, 0, 1],
     "fov": 90,
     "aspect_ratio": "1/1",
     "defocus_angle": 0,
@@ -17,11 +17,6 @@
 
   "objects": {
     "sphere": [
-      {
-        "center": [0, 25, -25],
-        "radius": 25,
-        "material": 6
-      }
     ],
 
     "plane": [
@@ -32,40 +27,16 @@
 
     "quad": [
       {
-        "corner": [-120, -120, -40],
-        "u": [0, 240, 0],
-        "v": [0, 0, -160],
-        "material": 5
-      },
-      {
-        "corner": [120, -120, -40],
-        "u": [0, 0, -160],
-        "v": [0, 240, 0],
-        "material": 4
-      },
-      {
-        "corner": [-120, 120, -40],
-        "u": [240, 0, 0],
-        "v": [0, 0, -160],
-        "material": 2
-      },
-      {
-        "corner": [-120, -120, -40],
-        "u": [0, 0, -160],
-        "v": [240, 0, 0],
-        "material": 2
-      },
-      {
-        "corner": [-120, -120, -200],
-        "u": [0, 240, 0],
-        "v": [240, 0, 0],
-        "material": 2
-      },
-      {
-        "corner": [-40, 119, -100],
-        "u": [80, 0, 0],
-        "v": [0, 0, -40],
+        "corner": [-100, 200, -100],
+        "u": [200, 0, 0],
+        "v": [0, 0, 200],
         "material": 1
+      },
+      {
+        "corner": [-100, -100, -50],
+        "u": [200, 0, 0],
+        "v": [0, 200, 0],
+        "material": 5
       }
     ],
 
@@ -74,10 +45,16 @@
 
     "models": [
       {
-        "file": "data/box.obj",
-        "position": [0, -25, -50],
+        "file": "data/chess_scene_pieces/chess_scene_pieces.obj",
+        "position": [0, 0, -30],
         "material": 6,
-        "scale": 50
+        "scale": 4
+      },
+      {
+        "file": "data/capsule/capsule.obj",
+        "position": [0, 0, 30],
+        "material": 6,
+        "scale": 15
       }
     ]
   },
