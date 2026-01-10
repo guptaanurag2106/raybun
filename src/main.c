@@ -17,22 +17,31 @@
 const enum Log_Level level = Log_Trace;
 
 void usage(const char *prog_name) {
-    printf("Usage: %s <mode> [options]\n", prog_name);
-    printf("\nModes:\n");
-    printf("  master <port> <scene.json> [optional_output_image_name]\n");
-    printf("    Coordinate workers, manage job queue\n");
-    printf("  worker <http://master_ip:port> [optional_device_name]\n");
-    printf("    Poll for work, render tiles\n");
-    printf("  standalone <scene.json> [optional_output_image_name]\n");
-    printf("    Render locally (for testing)\n");
-    printf("  benchmark <scene.json>\n");
-    printf("    Test performance on this machine\n\n");
-    printf("-h/--help Print this help message and exit\n");
+    printf("%s — Distributed and standalone renderer\n\n", prog_name);
+    printf("Usage:\n");
+    printf("  %s <COMMAND> [ARGS]\n\n", prog_name);
+    printf("Commands:\n");
+    printf("  master <PORT> <SCENE> [OUTPUT]\n");
+    printf("      Coordinate workers and manage the render queue\n\n");
+    printf("  worker <MASTER_URL> [DEVICE_ID]\n");
+    printf("      Connect to master and render assigned tiles\n\n");
+    printf("  standalone <SCENE> [OUTPUT]\n");
+    printf("      Render locally (single process)\n\n");
+    printf("  benchmark <SCENE>\n");
+    printf("      Run performance benchmark on this machine\n\n");
+    printf("Arguments:\n");
+    printf("  PORT           Port to listen on (master mode)\n");
+    printf("  SCENE          Scene description file (JSON)\n");
+    printf("  OUTPUT         Output image file name\n");
+    printf("  MASTER_URL     Master address (e.g. http://127.0.0.1:8080)\n");
+    printf("  DEVICE_ID      ID for the worker device\n\n");
+    printf("Options:\n");
+    printf("  -h, --help     Print this help message and exit\n");
 }
 
 void print_args_error(const char *prog_name, const char *error) {
-    fprintf(stderr, "%s\n", error);
-    fprintf(stderr, "More info with %s -h\n", prog_name);
+    fprintf(stderr, "error: %s\n", error);
+    fprintf(stderr, "For more information, try '%s -h'.\n", prog_name);
     exit(1);
 }
 
@@ -114,22 +123,18 @@ int main(int argc, char **argv) {
         if (strncmp(flag, "master", 6) == 0) {
             if (argc <= 0) {
                 print_args_error(
-                    prog_name,
-                    "subcommand 'master': expected a port and scene.json file");
+                    prog_name, "missing required arguments <PORT> and <SCENE>");
             }
             const char *port1 = shift(&argc, &argv);
             port = atoi(port1);
             if (port == 0) {
                 print_args_error(
                     prog_name,
-                    temp_sprintf(
-                        "subcommand 'master': could not parse port '%s'",
-                        port1));
+                    temp_sprintf("invalid value '%s' for <PORT>", port1));
             }
             if (argc <= 0) {
-                print_args_error(
-                    prog_name,
-                    "subcommand 'master': expected a scene.json file");
+                print_args_error(prog_name,
+                                 "missing required argument <SCENE>");
             }
             scene_json_file = shift(&argc, &argv);
             if (argc > 0) {
@@ -139,8 +144,7 @@ int main(int argc, char **argv) {
         } else if (strncmp(flag, "worker", 6) == 0) {
             if (argc <= 0) {
                 print_args_error(prog_name,
-                                 "subcommand 'worker': expected a "
-                                 "master_ip:port [optional_device_name]");
+                                 "missing required argument <MASTER_URL>");
             }
             perf_json_file = "data/benchmark.json";  // used for benchmark
             master_url = shift(&argc, &argv);
@@ -148,9 +152,8 @@ int main(int argc, char **argv) {
             mode = 1;
         } else if (strncmp(flag, "standalone", 10) == 0) {
             if (argc <= 0) {
-                print_args_error(
-                    prog_name,
-                    "subcommand 'standalone': expected scene.json file");
+                print_args_error(prog_name,
+                                 "missing required argument <SCENE>");
             }
             scene_json_file = shift(&argc, &argv);
             if (argc > 0) {
@@ -168,7 +171,7 @@ int main(int argc, char **argv) {
             return 0;
         } else {
             print_args_error(prog_name,
-                             temp_sprintf("Unknown option '%s'", flag));
+                             temp_sprintf("unexpected option '%s'", flag));
         }
     }
     UNUSED(master_url);
