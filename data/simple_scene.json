@@ -17,11 +17,6 @@
 
   "objects": {
     "sphere": [
-      {
-        "center": [0, 25, -25],
-        "radius": 25,
-        "material": 6
-      }
     ],
 
     "plane": [
@@ -74,9 +69,9 @@
 
     "models": [
       {
-        "file": "data/box.obj",
-        "position": [0, -25, -50],
-        "material": 6,
+        "file": "data/suzanne/model.obj",
+        "position": [0, -25, -100],
+        "material": 2,
         "scale": 50
       }
     ]

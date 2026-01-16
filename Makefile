@@ -31,7 +31,7 @@ INCLUDES += -I$(CJSON_DIR)
 LIBS     += -L$(CJSON_BUILD) -lcjson
 LD_RPATH += -Wl,-rpath,$(CJSON_BUILD)
 
-CFLAGS_DEBUG   = -Wall -Wextra -ggdb -std=c11 -DDEBUG -O0
+CFLAGS_DEBUG   = -Wall -Wextra -ggdb -std=c11 -DDEBUG -O2 -fno-omit-frame-pointer -fno-inline
 
 CFLAGS_RELEASE = -Wall -Wextra -O3 -std=c11 -march=native \
                  -funroll-loops -flto -ffunction-sections \
