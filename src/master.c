@@ -1,5 +1,4 @@
 #define _POSIX_C_SOURCE 200809L
-#include <cJSON.h>
 #include <microhttpd.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -8,6 +7,7 @@
 #include <string.h>
 
 #include "api.h"
+#include "cJSON.h"
 #include "libmicrohttpd-1.0.1/src/include/microhttpd.h"
 #include "utils.h"
 

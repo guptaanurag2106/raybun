@@ -85,7 +85,7 @@ void Log(enum Log_Level level, const char *format, ...);
                     __LINE__);                                              \
             abort();                                                        \
         }                                                                   \
-    } while (0)
+  } while (0)
 #else
 #define ASSERT(x) ((void)0)
 #endif
@@ -281,12 +281,12 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
     return (A == A1 + A2 + A3);
 }
 
-#define Vector(T)        \
-    struct {             \
+#define Vector(T, Name)  \
+    typedef struct {             \
         T *items;        \
         size_t size;     \
         size_t capacity; \
-    }
+    } Name;
 
 #define vec_init(v)        \
     do {                   \
@@ -317,6 +317,7 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
         (v)->items[(v)->size++] = (value);                  \
     } while (0)
 
+// FIX: use ASSERT?
 #define vec_get(v, n) (assert((n) < (v)->size), (v)->items[(n)])
 
 #define vec_pop(v) (--(v)->size)

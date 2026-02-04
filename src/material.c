@@ -8,7 +8,7 @@
 bool lambertian_scatter(const Material *mat, const HitRecord *rec,
                         const Ray *ray_in, Colour *attenuation, Ray *ray_out) {
     UNUSED(ray_in);
-    if (mat->type != MAT_LAMBERTIAN) return false;
+    ASSERT(mat->type == MAT_LAMBERTIAN);
 
     V3f scatter_dir = v3f_add(rec->normal, v3f_random_unit());
     if (v3f_near_zero(scatter_dir)) {
@@ -21,7 +21,7 @@ bool lambertian_scatter(const Material *mat, const HitRecord *rec,
 
 bool metal_scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
                    Colour *attenuation, Ray *ray_out) {
-    if (mat->type != MAT_METAL) return false;
+    ASSERT(mat->type == MAT_METAL);
 
     V3f reflected_dir = v3f_reflect(ray_in->direction, rec->normal);
     reflected_dir =
@@ -41,7 +41,7 @@ static float reflectance(float cosine, float refraction_index) {
 
 bool dielectric_scatter(const Material *mat, const HitRecord *rec,
                         const Ray *ray_in, Colour *attenuation, Ray *ray_out) {
-    if (mat->type != MAT_DIELECTRIC) return false;
+    ASSERT(mat->type == MAT_DIELECTRIC);
     *attenuation = (Colour){1, 1, 1};
     float ri = rec->front_face ? (1.0 / mat->properties.dielectric.etai_eta)
                                : mat->properties.dielectric.etai_eta;

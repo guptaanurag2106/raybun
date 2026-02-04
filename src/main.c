@@ -211,7 +211,7 @@ int main(int argc, char **argv) {
         init_work(context->scene, context->state, context->work);
 
         // TODO: better error handling, check async
-        //  Start server before rendering so we can check status/connect
+        // Start server before rendering so we can check status/connect
         if (mode == 0) {
             bool success = master_start_server(port, context);
             if (success) {

@@ -1,4 +1,4 @@
-#include "renderer.h" renc
+#include "renderer.h"
 
 #include <malloc.h>
 #include <math.h>

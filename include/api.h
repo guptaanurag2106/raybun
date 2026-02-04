@@ -20,10 +20,12 @@ typedef struct {
     int processed;
 } ConnectionInfo;
 
+Vector(MachineInfo, Machines);
+
 typedef struct {
     Scene *scene;
     State *state;
-    Vector(MachineInfo) workers;
+    Machines workers;
     Work *work;
 } MasterAPIContext;
 

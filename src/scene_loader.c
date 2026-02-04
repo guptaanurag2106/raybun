@@ -42,7 +42,7 @@ static V3f parse_v3f(const cJSON *arr, const char *ctx, const V3f fallback) {
 
 static float parse_float(const cJSON *node, const char *ctx, float fallback) {
     if (!cJSON_IsNumber(node)) {
-        log_warn(temp_sprintf("%s: expected number, using default.", ctx));
+        log_warn(temp_sprintf("s%: expected number, using default.", ctx));
         return fallback;
     }
     return node->valuedouble;
@@ -104,7 +104,8 @@ static Triangle make_triangle(V3f p1, V3f p2, V3f p3, int mat_index) {
                       .mat_index = mat_index};
 }
 
-static Vector(Hittable) hv = {0};
+Vector(Hittable, Hittables);
+static Hittables hv = {0};
 static inline void append_hittable(Hittable h) { vec_push(&hv, h); }
 
 static void append_sphere(Scene *scene, Sphere sphere) {
@@ -175,242 +176,122 @@ static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
                 make_quad((V3f){minp.x, minp.y, minp.z}, dz, dx, mat_index));
 }
 
-static void model_file_error(const char *buf, const char *file_name,
-                             size_t line_no) {
-    Log(Log_Warn, "load_scene: Unknown/Unsupported line '%s' in %s:%d", buf,
-        file_name, line_no);
-}
-
-size_t count_slashes(const char *buf, size_t start, size_t length) {
-    size_t count = 0;
-    for (size_t i = start; i < length; i++) {
-        if (buf[i] == '/')
-            count++;
-        else if (buf[i] == ' ')
-            break;
-    }
-    return count;
-}
-
 static void add_model(Scene *scene, FILE *f, V3f position, float scale, int mi,
                       const char *file_name) {
-    const size_t buf_size = 100;  // TODO: max line length
-    char buf[buf_size];
-    size_t n = 0;
-
+    char buf[512];
     size_t line_no = 0;
     size_t triangle_count = 0;
 
-    Vector(V3f) vs = {0};
-    Vector(V3f) vts = {0};
-    Vector(V3f) vns = {0};
-    Vector(V3f) vps = {0};
+    Vector(V3f, Vertices);
+    Vertices vs = {0};
+    Vector(V3f, Textures);
+    Textures vts = {0};
+    Vector(V3f, Parameters);
+    Parameters vps = {0};
+    Vector(V3f, Normals);
+    Normals vns = {0};
 
     while (fgets(buf, sizeof(buf), f) != NULL) {
         line_no++;
-        n = 0;
-        size_t l = strlen(buf) - 1;
-        buf[l] = '\0';
-        while (n < l && isspace(buf[n])) n++;
-        if (n >= l || buf[n] == '#') continue;
+        char *ptr = buf;
+        while (*ptr && isspace((unsigned char)*ptr)) ptr++;
+        if (*ptr == '\0' || *ptr == '#') continue;
 
-        if (buf[n] == 'v') {
-            char type[3];
-            float x, y, z;
-            if (sscanf(buf, "%2s %f %f %f", type, &x, &y, &z) == 4) {
-                V3f vec = {x, y, z};
-                if (strcmp(type, "v") == 0) {
+        if (*ptr == 'v') {
+            ptr++;
+            if (isspace((unsigned char)*ptr)) {
+                // Vertex position
+                float x, y, z;
+                if (sscanf(ptr, "%f %f %f", &x, &y, &z) == 3) {
+                    V3f vec = {x, y, z};
                     vec = v3f_add(v3f_mulf(vec, scale), position);
                     vec_push(&vs, vec);
-                } else if (strcmp(type, "vt") == 0) {
-                    vec_push(&vts, vec);
-                } else if (strcmp(type, "vn") == 0) {
-                    vec_push(&vns, vec);
-                } else if (strcmp(type, "vp") == 0) {
-                    vec_push(&vps, vec);
-                } else {
-                    model_file_error(buf, file_name, line_no);
                 }
-            } else if (sscanf(buf, "%2s %f %f", type, &x, &y) == 3) {
-                if (strcmp(type, "vt") == 0) {
-                    V3f vec = {x, y, -1};
-                    vec_push(&vts, vec);
-                } else {
-                    model_file_error(buf, file_name, line_no);
-                }
-            } else {
-                model_file_error(buf, file_name, line_no);
+            } else if (*ptr == 't' && isspace((unsigned char)*(ptr + 1))) {
+                // Texture coordinate
+                float u = 0, v = 0, w = 0;
+                sscanf(ptr + 1, "%f %f %f", &u, &v, &w);
+                vec_push(&vts, ((V3f){u, v, w}));
+            } else if (*ptr == 'n' && isspace((unsigned char)*(ptr + 1))) {
+                // Normal
+                float x = 0, y = 0, z = 0;
+                sscanf(ptr + 1, "%f %f %f", &x, &y, &z);
+                vec_push(&vns, ((V3f){x, y, z}));
+            } else if (*ptr == 'p' && isspace((unsigned char)*(ptr + 1))) {
+                // Parameter space
+                float u = 0, v = 0, w = 0;
+                sscanf(ptr + 1, "%f %f %f", &u, &v, &w);
+                vec_push(&vps, ((V3f){u, v, w}));
             }
             continue;
         }
 
-        if (buf[n] == 'f' && buf[n + 1] == ' ') {
-            n += 2;
-            while (n < l && isspace(buf[n])) n++;
-            size_t slash_count = count_slashes(buf, n, l);
-            if (slash_count == 0) {
-                size_t a, b, c, d;
-                if (sscanf(buf + n, "%zd %zd %zd %zd", &a, &b, &c, &d) == 4) {
-                    a -= 1;
-                    b -= 1;
-                    c -= 1;
-                    d -= 1;
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, b), vec_get(&vs, a),
-                                             vec_get(&vs, c), mi));
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, c), vec_get(&vs, a),
-                                             vec_get(&vs, d), mi));
-                    triangle_count += 2;
-                } else if (sscanf(buf + n, "%zd %zd %zd", &a, &b, &c) == 3) {
-                    a -= 1;
-                    b -= 1;
-                    c -= 1;
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, a), vec_get(&vs, b),
-                                             vec_get(&vs, c), mi));
-                    triangle_count += 1;
-                } else {
-                    model_file_error(buf, file_name, line_no + 1);
+        if (*ptr == 'f' && isspace((unsigned char)*(ptr + 1))) {
+            ptr += 2;
+            int v_idx[4] = {0};
+            int count = 0;
+
+            char *token = strtok(ptr, " \t\r\n");
+            while (token && count < 4) {
+                v_idx[count] = atoi(token);
+                // We could parse vt/vn here if needed, but we currently only
+                // use vertices
+                count++;
+                token = strtok(NULL, " \t\r\n");
+            }
+
+            // Convert indices (1-based to 0-based, handle negatives)
+            for (int i = 0; i < count; i++) {
+                if (v_idx[i] > 0)
+                    v_idx[i]--;
+                else if (v_idx[i] < 0)
+                    v_idx[i] += vs.size;
+                if (v_idx[i] < 0 || v_idx[i] >= (int)vs.size)
+                    v_idx[i] = 0;  // handling some random error case
+            }
+
+            if (count >= 3) {
+                append_triangle(scene,
+                                make_triangle(vec_get(&vs, v_idx[1]),
+                                              vec_get(&vs, v_idx[0]),
+                                              vec_get(&vs, v_idx[2]), mi));
+                triangle_count++;
+
+                if (count == 4) {
+                    append_triangle(scene,
+                                    make_triangle(vec_get(&vs, v_idx[2]),
+                                                  vec_get(&vs, v_idx[0]),
+                                                  vec_get(&vs, v_idx[3]), mi));
+                    triangle_count++;
                 }
-            } else if (slash_count == 1) {
-                size_t v1, v2, v3, v4, vt1, vt2, vt3, vt4;
-                if (sscanf(buf + n, "%zd/%zd %zd/%zd %zd/%zd %zd/%zd", &v1,
-                           &vt1, &v2, &vt2, &v3, &vt3, &v4, &vt4) == 8) {
-                    v1 -= 1;
-                    v2 -= 1;
-                    v3 -= 1;
-                    v4 -= 1;
-                    vt1 -= 1;
-                    vt2 -= 1;
-                    vt3 -= 1;
-                    vt4 -= 1;
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v2), vec_get(&vs, v1),
-                                             vec_get(&vs, v3), mi));
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v3), vec_get(&vs, v1),
-                                             vec_get(&vs, v4), mi));
-                    triangle_count += 2;
-                } else if (sscanf(buf + n, "%zd/%zd %zd/%zd %zd/%zd", &v1, &vt1,
-                                  &v2, &vt2, &v3, &vt3) == 6) {
-                    v1 -= 1;
-                    v2 -= 1;
-                    v3 -= 1;
-                    vt1 -= 1;
-                    vt2 -= 1;
-                    vt3 -= 1;
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v2), vec_get(&vs, v1),
-                                             vec_get(&vs, v3), mi));
-                    triangle_count += 1;
-                } else {
-                    model_file_error(buf, file_name, line_no);
-                }
-            } else if (slash_count == 2) {
-                size_t v1, v2, v3, v4, vt1, vt2, vt3, vt4, vn1, vn2, vn3, vn4;
-                if (sscanf(buf + n,
-                           "%zd/%zd/%zd %zd/%zd/%zd %zd/%zd/%zd %zd/%zd/%zd",
-                           &v1, &vt1, &vn1, &v2, &vt2, &vn2, &v3, &vt3, &vn3,
-                           &v4, &vt4, &vn4) == 12) {
-                    v1 -= 1;
-                    v2 -= 1;
-                    v3 -= 1;
-                    v4 -= 1;
-                    vt1 -= 1;
-                    vt2 -= 1;
-                    vt3 -= 1;
-                    vt4 -= 1;
-                    vn1 -= 1;
-                    vn2 -= 1;
-                    vn3 -= 1;
-                    vn4 -= 1;
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v2), vec_get(&vs, v1),
-                                             vec_get(&vs, v3), mi));
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v3), vec_get(&vs, v1),
-                                             vec_get(&vs, v4), mi));
-                    triangle_count += 2;
-                } else if (sscanf(buf + n,
-                                  "%zd/%zd/%zd %zd/%zd/%zd %zd/%zd/%zd", &v1,
-                                  &vt1, &vn1, &v2, &vt2, &vn2, &v3, &vt3,
-                                  &vn3) == 9) {
-                    v1 -= 1;
-                    v2 -= 1;
-                    v3 -= 1;
-                    vt1 -= 1;
-                    vt2 -= 1;
-                    vt3 -= 1;
-                    vn1 -= 1;
-                    vn2 -= 1;
-                    vn3 -= 1;
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v2), vec_get(&vs, v1),
-                                             vec_get(&vs, v3), mi));
-                    triangle_count += 1;
-                } else if (sscanf(buf + n,
-                                  "%zd//%zd %zd//%zd %zd//%zd %zd//%zd", &v1,
-                                  &vn1, &v2, &vn2, &v3, &vn3, &v4, &vn4) == 8) {
-                    v1 -= 1;
-                    v2 -= 1;
-                    v3 -= 1;
-                    v4 -= 1;
-                    vn1 -= 1;
-                    vn2 -= 1;
-                    vn3 -= 1;
-                    vn4 -= 1;
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v2), vec_get(&vs, v1),
-                                             vec_get(&vs, v3), mi));
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v3), vec_get(&vs, v1),
-                                             vec_get(&vs, v4), mi));
-                    triangle_count += 2;
-                } else if (sscanf(buf + n, "%zd//%zd %zd//%zd %zd//%zd", &v1,
-                                  &vn1, &v2, &vn2, &v3, &vn3) == 6) {
-                    v1 -= 1;
-                    v2 -= 1;
-                    v3 -= 1;
-                    vn1 -= 1;
-                    vn2 -= 1;
-                    vn3 -= 1;
-                    append_triangle(
-                        scene, make_triangle(vec_get(&vs, v2), vec_get(&vs, v1),
-                                             vec_get(&vs, v3), mi));
-                    triangle_count += 1;
-                } else {
-                    model_file_error(buf, file_name, line_no);
-                }
-            } else {
-                model_file_error(buf, file_name, line_no);
             }
             continue;
         }
 
-        if (strncmp(buf + n, "mtllib", 6) == 0) {
+        if (strncmp(ptr, "mtllib", 6) == 0) {
             log_warn("mtllib not supported in obj files");
             continue;
         }
-        if (strncmp(buf + n, "usemtl", 6) == 0) {
+        if (strncmp(ptr, "usemtl", 6) == 0) {
             log_warn("usemtl not supported in obj files");
             continue;
         }
 
-        if (strncmp(buf + n, "o ", 2) == 0) {
+        if (strncmp(ptr, "o ", 2) == 0) {
             // Log(Log_Debug, "load_scene: Loading object %s from file %s",
-            //     buf + n + 2, file_name);
+            //     ptr + 2, file_name);
             continue;
         }
 
         // TODO: group<->material link efficient rendering?
-        if (strncmp(buf + n, "g ", 2) == 0) {
+        if (strncmp(ptr, "g ", 2) == 0) {
             // Log(Log_Debug, "load_scene: Loading group %s from file %s",
-            //     buf + n + 2, file_name);
+            //     ptr + 2, file_name);
             continue;
         }
 
-        model_file_error(buf, file_name, line_no);
+        Log(Log_Warn, "load_scene: Unknown/Unsupported line '%s' in %s:%zu",
+            buf, file_name, line_no);
     }
 
     Log(Log_Info, "load_scene: Loaded %s with %d vertices and %d triangles",
