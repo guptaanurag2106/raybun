@@ -2,11 +2,35 @@
 
 Raybun is a simple, distributed C-based raytracer. It renders 3D scenes defined in JSON files and supports distributed rendering across multiple machines (Master-Worker style).
 
-![Demo Render](data/simple_scene.jpg)
+![Demo Render](./data/simple_scene.jpg)
 
 ## How it works
 
 The core is a tile-based path tracer. It takes a JSON scene description (check out `data/scene_schema.json` for the format) which defines the camera, materials, and objects (spheres, quads, triangles, boxes, etc.).
+
+A small scene example:
+
+```json
+{
+  "config": {
+    "width": 400, "height": 300, 
+    "samples_per_pixel": 10, "max_depth": 5
+  },
+  "camera": {
+    "position": [0, 0, -5], "look_at": [0, 0, 0], "up": [0, 1, 0],
+    "fov": 60, "aspect_ratio": "4/3", "defocus_angle": 0, "focus_dist": 1
+  },
+  "materials": [
+    { "type": "lambertian", "albedo": [0.8, 0.3, 0.3] },
+    { "type": "metal", "albedo": [0.8, 0.8, 0.8], "fuzz": 0.1 }
+  ],
+  "objects": {
+    "sphere": [{ "center": [0, 0, 0], "radius": 1, "material": 0 }],
+    "models": [{ "file": "data/suzanne/model.obj", "material": 1, "position": [2, 0, 0], "scale": 1 }],
+    "plane": [], "triangle": [], "quad": [], "boxes": []
+  }
+}
+```
 
 ### Distributed Rendering (UNDER WORK)
 It uses a **Master-Worker** architecture over HTTP/JSON:
