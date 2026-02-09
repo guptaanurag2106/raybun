@@ -2,7 +2,7 @@
   "config": {
     "width": 2160,
     "height": 2160,
-    "samples_per_pixel": 200,
+    "samples_per_pixel": 150,
     "max_depth": 50
   },
   "camera": {
@@ -11,13 +11,13 @@
     "up": [0, 1, 0],
     "fov": 90,
     "aspect_ratio": "1/1",
-    "defocus_angle": 0,
-    "focus_dist": 100.0
+    "defocus_angle": 0.2,
+    "focus_dist": 150.0
   },
 
   "objects": {
     "sphere": [
-      { "center": [50, 0, -50], "radius": 20, "material": 6 }
+      { "center": [50, 0, -50], "radius": 20, "material": 4 }
     ],
 
     "plane": [
@@ -31,37 +31,37 @@
           "corner": [-120, -120, -40],
           "u": [0, 240, 0],
           "v": [0, 0, -160],
-          "material": 5
+          "material": 3
         },
         {
           "corner": [120, -120, -40],
           "u": [0, 0, -160],
           "v": [0, 240, 0],
-          "material": 4
+          "material": 2
         },
         {
           "corner": [-120, 120, -40],
           "u": [240, 0, 0],
           "v": [0, 0, -160],
-          "material": 2
+          "material": 1
         },
         {
           "corner": [-120, -120, -40],
           "u": [0, 0, -160],
           "v": [240, 0, 0],
-          "material": 2
+          "material": 1
         },
         {
           "corner": [-120, -120, -200],
           "u": [0, 240, 0],
           "v": [240, 0, 0],
-          "material": 2
+          "material": 1
         },
         {
           "corner": [-40, 119, -100],
           "u": [80, 0, 0],
           "v": [0, 0, -40],
-          "material": 1
+          "material": 0
         }
     ],
 
@@ -69,26 +69,22 @@
         {
             "a": [-30, -120, -140],
             "b": [-90, 20, -200],
-            "material": 2
+            "material": 1
         },
         {
             "a": [-40, -120, -120],
             "b": [0, -20, -80],
-            "material": 2
+            "material": 1
         }
     ]
   },
 
   "materials": [
-    { "type": "dielectric", "refraction_index": 1.5 },
     { "type": "emissive", "emission": [1, 1, 1] },
     { "type": "lambertian", "albedo": [0.75, 0.75, 0.75] },
-    { "type": "lambertian", "albedo": [0.5, 0.5, 0.5] },
     { "type": "lambertian", "albedo": [0.8, 0.2, 0.2] },
     { "type": "lambertian", "albedo": [0.2, 0.8, 0.2] },
-    { "type": "metal", "albedo": [0.9, 0.9, 0.9], "fuzz": 0.05 },
-    { "type": "lambertian", "albedo": [0.9, 0.9, 0.9] },
-    { "type": "lambertian", "albedo": [0.7, 0.7, 0.7] }
+    { "type": "metal", "albedo": [0.9, 0.9, 0.9], "fuzz": 0.05 }
   ]
 }
 

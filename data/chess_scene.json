@@ -49,12 +49,6 @@
         "position": [0, 0, -30],
         "material": 6,
         "scale": 4
-      },
-      {
-        "file": "data/capsule/capsule.obj",
-        "position": [0, 0, 30],
-        "material": 6,
-        "scale": 15
       }
     ]
   },

@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
     int mode = 0;
     char *scene_json_file = "data/simple_scene.json";
     char *perf_json_file = "data/benchmark.json";
-    char *output_name = "data/simple_scene.ppm";
+    char *output_name = NULL;
 
     int port;
     char *master_url = "";
@@ -239,6 +239,14 @@ int main(int argc, char **argv) {
 
     // export image for master, and standalone modes
     if (mode == 0 || mode == 2) {
+        if (output_name == NULL) {
+            output_name = strdup(scene_json_file);
+            char *mark = strstr(output_name, ".json");
+            mark[1] = 'p';
+            mark[2] = 'n';
+            mark[3] = 'g';
+            mark[4] = '\0';
+        }
         export_image(output_name, state->image, state->width, state->height);
     }
 

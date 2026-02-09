@@ -2,7 +2,7 @@
   "config": {
     "width": 720,
     "height": 720,
-    "samples_per_pixel": 50,
+    "samples_per_pixel": 80,
     "max_depth": 50
   },
   "camera": {

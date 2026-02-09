@@ -85,7 +85,7 @@ void Log(enum Log_Level level, const char *format, ...);
                     __LINE__);                                              \
             abort();                                                        \
         }                                                                   \
-  } while (0)
+    } while (0)
 #else
 #define ASSERT(x) ((void)0)
 #endif
@@ -282,7 +282,7 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
 }
 
 #define Vector(T, Name)  \
-    typedef struct {             \
+    typedef struct {     \
         T *items;        \
         size_t size;     \
         size_t capacity; \
@@ -352,6 +352,8 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
 // ----------------------------------------------------------------------------
 //  String Utils
 // ----------------------------------------------------------------------------
+char *strdup(const char *src);
+
 #define UTILS_MAX_TEMP_SIZE 1024 * 100
 char *combine_charp(const char *str1, const char *str2);
 // Will use the utils_static_temp_buffer and reset it everytime its filled
@@ -526,6 +528,22 @@ int calculate_infix(const char *expr) {
     }
 
     return values[vtop];
+}
+
+char *strdup(const char *src) {
+    if (src == NULL) return NULL;
+
+    size_t len = strlen(src);
+    char *dst = malloc(sizeof(char) * (len + 1));
+    if (dst == NULL) {
+        Log(Log_Error, "strdup: malloc failed");
+        return NULL;
+    }
+
+    char *ptr = dst;
+    while ((*ptr++ = *src++));
+
+    return dst;
 }
 
 static char utils_static_temp_buffer[UTILS_MAX_TEMP_SIZE];
