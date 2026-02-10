@@ -1,10 +1,11 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct {
-    int width;
-    int height;
+    size_t width;
+    size_t height;
     int samples_per_pixel;
     int max_depth;
 
@@ -13,7 +14,7 @@ typedef struct {
 
 typedef struct {
     float perf;
-    int thread_count;
+    long thread_count;
     int simd;  // future use
 
     char *name;

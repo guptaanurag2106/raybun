@@ -7,7 +7,7 @@
 #include "utils.h"
 
 void export_ppm(const char *output_file_name, const uint32_t *image,
-                const int width, const int height) {
+                const size_t width, const size_t height) {
     FILE *f = fopen(output_file_name, "wb");
     if (f == NULL) {
         Log(Log_Error, temp_sprintf("export_ppm: %s", strerror(errno)));
@@ -15,11 +15,11 @@ void export_ppm(const char *output_file_name, const uint32_t *image,
     }
 
     fprintf(f, "P6\n");
-    fprintf(f, "%d %d\n", width, height);
+    fprintf(f, "%zu %zu\n", width, height);
     fprintf(f, "255\n");
 
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
+    for (size_t i = 0; i < height; i++) {
+        for (size_t j = 0; j < width; j++) {
             uint32_t pixel = image[i * width + j];
 
             uint8_t r = (pixel >> 16) & 0xFF;
@@ -35,7 +35,7 @@ void export_ppm(const char *output_file_name, const uint32_t *image,
 }
 
 void export_png(const char *output_file_name, const uint32_t *image,
-                const int width, const int height) {
+                const size_t width, const size_t height) {
     uint32_t *converted_image =
         (uint32_t *)malloc(width * height * sizeof(uint32_t));
     if (converted_image == NULL) {
@@ -43,7 +43,7 @@ void export_png(const char *output_file_name, const uint32_t *image,
         exit(1);
     }
 
-    for (int i = 0; i < width * height; i++) {
+    for (size_t i = 0; i < width * height; i++) {
         uint32_t pixel = image[i];
         uint8_t a = (pixel >> 24) & 0xFF;
         uint8_t r = (pixel >> 16) & 0xFF;
@@ -60,7 +60,7 @@ void export_png(const char *output_file_name, const uint32_t *image,
 }
 
 void export_image(const char *output_file_name, const uint32_t *image,
-                  const int width, const int height) {
+                  const size_t width, const size_t height) {
     if (strstr(output_file_name, ".png") != NULL) {
         export_png(output_file_name, image, width, height);
     } else if (strstr(output_file_name, ".ppm") != NULL) {

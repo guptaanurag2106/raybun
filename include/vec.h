@@ -16,7 +16,40 @@ extern "C" {
 #define VECDEF static inline
 #endif
 
-#define EPS 1e-8
+#define EPS 1e-8f
+
+typedef struct {
+    float x, y;
+} V2f;
+
+VECDEF V2f v2f_add(V2f a, V2f b) { return (V2f){a.x + b.x, a.y + b.y}; }
+
+VECDEF V2f v2f_sub(V2f a, V2f b) { return (V2f){a.x - b.x, a.y - b.y}; }
+
+VECDEF V2f v2f_mulf(V2f a, float s) { return (V2f){a.x * s, a.y * s}; }
+
+VECDEF V2f v2f_divf(V2f a, float s) {
+    if (s == 0) return (V2f){0, 0};
+    return (V2f){a.x / s, a.y / s};
+}
+
+VECDEF float v2f_dot(V2f a, V2f b) { return a.x * b.x + a.y * b.y; }
+
+VECDEF float v2f_length_sq(V2f a) { return a.x * a.x + a.y * a.y; }
+
+VECDEF float v2f_length(V2f a) { return sqrtf(v2f_length_sq(a)); }
+
+VECDEF V2f v2f_normalize(V2f a) {
+    float len = v2f_length(a);
+    if (len == 0) return a;
+    return v2f_divf(a, len);
+}
+
+VECDEF bool v2f_near_zero(V2f a) {
+    return (fabsf(a.x) < EPS) && (fabsf(a.y) < EPS);
+}
+
+VECDEF void v2f_print(V2f a) { printf("x: %f, y: %f\n", a.x, a.y); }
 
 typedef struct {
     float x, y, z;
@@ -132,5 +165,4 @@ VECDEF V3f v3f_refract(const V3f uv, const V3f n, float etai_eta) {
 #ifdef _cplusplus
 }
 #endif
-
 #endif  // VEC_H

@@ -16,7 +16,7 @@
 
 const enum Log_Level level = Log_Trace;
 
-void usage(const char *prog_name) {
+static void usage(const char *prog_name) {
     printf("%s — Distributed and standalone renderer\n\n", prog_name);
     printf("Usage:\n");
     printf("  %s <COMMAND> [ARGS]\n\n", prog_name);
@@ -39,13 +39,13 @@ void usage(const char *prog_name) {
     printf("  -h, --help     Print this help message and exit\n");
 }
 
-void print_args_error(const char *prog_name, const char *error) {
+static void print_args_error(const char *prog_name, const char *error) {
     fprintf(stderr, "error: %s\n", error);
     fprintf(stderr, "For more information, try '%s -h'.\n", prog_name);
     exit(1);
 }
 
-MachineInfo get_device_stats(const char *perf_json_file, char *name) {
+static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
     Log_set_level(Log_Warn);
 
     Scene *scene = malloc(sizeof(Scene));
@@ -77,12 +77,12 @@ MachineInfo get_device_stats(const char *perf_json_file, char *name) {
     else if (ms <= tmin)
         perf_score = 10;
     else
-        perf_score = 10.0 * (1.0 - (ms - tmin) / (tmax - tmin));
+        perf_score = 10.0f * (1.0f - (ms - tmin) / (tmax - tmin));
 
     free_scene(scene);
     Log_set_level(level);
 
-    int thread_count = sysconf(_SC_NPROCESSORS_ONLN);
+    long thread_count = sysconf(_SC_NPROCESSORS_ONLN);
     int simd = -1;
     if (name == NULL || strlen(name) == 0) {
         name = generate_uuid();
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
         }
 
         // master will run on N-1 threads
-        int thread_count = stats.thread_count - 1;
+        long thread_count = stats.thread_count - 1;
         render_scene(context->work, thread_count);
         vec_free(&context->workers);
     }
@@ -241,7 +241,12 @@ int main(int argc, char **argv) {
     if (mode == 0 || mode == 2) {
         if (output_name == NULL) {
             output_name = strdup(scene_json_file);
-            char *mark = strstr(output_name, ".json");
+            char *mark = NULL;
+            char *mark_next = strstr(output_name, ".json");
+            while (mark_next != NULL) {
+                mark = mark_next;
+                mark_next = strstr(mark_next + 1, ".json");
+            }
             mark[1] = 'p';
             mark[2] = 'n';
             mark[3] = 'g';

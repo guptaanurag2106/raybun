@@ -12,12 +12,12 @@
 #include "utils.h"
 #include "vec.h"
 
-void fatal(const char *msg) {
+static void fatal(const char *msg) {
     Log(Log_Error, msg);
     exit(1);
 }
 
-void log_warn(const char *msg) { Log(Log_Warn, "load_scene: %s", msg); }
+static void log_warn(const char *msg) { Log(Log_Warn, "load_scene: %s", msg); }
 
 void print_summary(const Scene *scene, const State *state) {
     Log(Log_Info, "load_scene: Creating image of size %d x %d", state->width,
@@ -45,7 +45,7 @@ static float parse_float(const cJSON *node, const char *ctx, float fallback) {
         log_warn(temp_sprintf("s%: expected number, using default.", ctx));
         return fallback;
     }
-    return node->valuedouble;
+    return (float)node->valuedouble;
 }
 
 static int parse_int(const cJSON *node, const char *ctx, int fallback) {
@@ -92,13 +92,16 @@ static Quad make_quad(V3f corner, V3f u, V3f v, int mat_index) {
 }
 
 // considering p1 as the common "corner"
-static Triangle make_triangle(V3f p1, V3f p2, V3f p3, int mat_index) {
+static Triangle make_triangle(V3f p1, V3f p2, V3f p3, V3f n1, V3f n2, V3f n3,
+                              V2f uv1, V2f uv2, V2f uv3, int mat_index) {
     V3f e1 = v3f_sub(p2, p1);
     V3f e2 = v3f_sub(p3, p1);
-    return (Triangle){.p1 = p1,
-                      .p2 = p2,
-                      .p3 = p3,
-                      .normal = v3f_cross(e1, e2),
+    Vertex v1 = {p1, n1, uv1};
+    Vertex v2 = {p2, n2, uv2};
+    Vertex v3 = {p3, n3, uv3};
+    return (Triangle){.v1 = v1,
+                      .v2 = v2,
+                      .v3 = v3,
                       .e1 = e1,
                       .e2 = e2,
                       .mat_index = mat_index};
@@ -226,47 +229,50 @@ static void add_model(Scene *scene, FILE *f, V3f position, float scale, int mi,
             continue;
         }
 
-        if (*ptr == 'f' && isspace((unsigned char)*(ptr + 1))) {
-            ptr += 2;
-            int v_idx[4] = {0};
-            int count = 0;
+        /* if (*ptr == 'f' && isspace((unsigned char)*(ptr + 1))) { */
+        /*     ptr += 2; */
+        /*     int v_idx[4] = {0}; */
+        /*     int count = 0; */
 
-            char *token = strtok(ptr, " \t\r\n");
-            while (token && count < 4) {
-                v_idx[count] = atoi(token);
-                // We could parse vt/vn here if needed, but we currently only
-                // use vertices
-                count++;
-                token = strtok(NULL, " \t\r\n");
-            }
+        /*     char *token = strtok(ptr, " \t\r\n"); */
+        /*     while (token && count < 4) { */
+        /*         v_idx[count] = atoi(token); */
+        /*         // We could parse vt/vn here if needed, but we currently only
+         */
+        /*         // use vertices */
+        /*         count++; */
+        /*         token = strtok(NULL, " \t\r\n"); */
+        /*     } */
 
-            // Convert indices (1-based to 0-based, handle negatives)
-            for (int i = 0; i < count; i++) {
-                if (v_idx[i] > 0)
-                    v_idx[i]--;
-                else if (v_idx[i] < 0)
-                    v_idx[i] += vs.size;
-                if (v_idx[i] < 0 || v_idx[i] >= (int)vs.size)
-                    v_idx[i] = 0;  // handling some random error case
-            }
+        /*     // Convert indices (1-based to 0-based, handle negatives) */
+        /*     for (int i = 0; i < count; i++) { */
+        /*         if (v_idx[i] > 0) */
+        /*             v_idx[i]--; */
+        /*         else if (v_idx[i] < 0) */
+        /*             v_idx[i] += vs.size; */
+        /*         if (v_idx[i] < 0 || v_idx[i] >= (int)vs.size) */
+        /*             v_idx[i] = 0;  // handling some random error case */
+        /*     } */
 
-            if (count >= 3) {
-                append_triangle(scene,
-                                make_triangle(vec_get(&vs, v_idx[1]),
-                                              vec_get(&vs, v_idx[0]),
-                                              vec_get(&vs, v_idx[2]), mi));
-                triangle_count++;
+        /*     if (count >= 3) { */
+        /*         append_triangle(scene, */
+        /*                         make_triangle(vec_get(&vs, v_idx[1]), */
+        /*                                       vec_get(&vs, v_idx[0]), */
+        /*                                       vec_get(&vs, v_idx[2]), mi));
+         */
+        /*         triangle_count++; */
 
-                if (count == 4) {
-                    append_triangle(scene,
-                                    make_triangle(vec_get(&vs, v_idx[2]),
-                                                  vec_get(&vs, v_idx[0]),
-                                                  vec_get(&vs, v_idx[3]), mi));
-                    triangle_count++;
-                }
-            }
-            continue;
-        }
+        /*         if (count == 4) { */
+        /*             append_triangle(scene, */
+        /*                             make_triangle(vec_get(&vs, v_idx[2]), */
+        /*                                           vec_get(&vs, v_idx[0]), */
+        /*                                           vec_get(&vs, v_idx[3]),
+         * mi)); */
+        /*             triangle_count++; */
+        /*         } */
+        /*     } */
+        /*     continue; */
+        /* } */
 
         if (strncmp(ptr, "mtllib", 6) == 0) {
             log_warn("mtllib not supported in obj files");
@@ -290,8 +296,9 @@ static void add_model(Scene *scene, FILE *f, V3f position, float scale, int mi,
             continue;
         }
 
-        Log(Log_Warn, "load_scene: Unknown/Unsupported line '%s' in %s:%zu",
-            buf, file_name, line_no);
+        /* Log(Log_Warn, "load_scene: Unknown/Unsupported line '%s' in %s:%zu",
+         */
+        /*     buf, file_name, line_no); */
     }
 
     Log(Log_Info, "load_scene: Loaded %s with %d vertices and %d triangles",
@@ -333,7 +340,12 @@ static int parse_triangle(Scene *scene, const cJSON *tnode) {
     const V3f P2 = parse_v3f(p2, "triangle.p2", (V3f){0});
     const V3f P3 = parse_v3f(p3, "triangle.p3", (V3f){0});
 
-    append_triangle(scene, make_triangle(P1, P2, P3, mi));
+    V3f e1 = v3f_sub(P2, P1);
+    V3f e2 = v3f_sub(P3, P1);
+    V3f n = v3f_cross(e1, e2);
+
+    append_triangle(scene, make_triangle(P1, P2, P3, n, n, n, (V2f){0},
+                                         (V2f){0}, (V2f){0}, mi));
     return 1;
 }
 
@@ -370,12 +382,17 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
 
     const cJSON *config = cJSON_GetObjectItemCaseSensitive(json, "config");
     if (cJSON_IsObject(config)) {
-        state->width =
-            parse_int(cJSON_GetObjectItemCaseSensitive(config, "width"),
-                      "config.width", state->width);
-        state->height =
+        int width = parse_int(cJSON_GetObjectItemCaseSensitive(config, "width"),
+                              "config.width", -1);
+        int height =
             parse_int(cJSON_GetObjectItemCaseSensitive(config, "height"),
-                      "config.height", state->height);
+                      "config.height", -1);
+        if (width <= 0 || height <= 0) {
+            fatal("config: invalid width/height");
+        }
+        state->width = (size_t)width;
+        state->height = (size_t)height;
+
         state->samples_per_pixel = parse_int(
             cJSON_GetObjectItemCaseSensitive(config, "samples_per_pixel"),
             "config.spp", state->samples_per_pixel);
@@ -383,7 +400,7 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
             parse_int(cJSON_GetObjectItemCaseSensitive(config, "max_depth"),
                       "config.max_depth", state->max_depth);
     } else {
-        fatal("config: not found, using defaults.");
+        fatal("config: not found.");
     }
 
     const cJSON *cam = cJSON_GetObjectItemCaseSensitive(json, "camera");
@@ -403,7 +420,7 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
         if (cJSON_IsString(ar)) {
             int n, d;
             if (sscanf(ar->valuestring, "%d/%d", &n, &d) == 2 && d != 0)
-                camera.aspect_ratio = (float)n / d;
+                camera.aspect_ratio = (float)n / (float)d;
             else
                 log_warn(
                     "camera.aspect_ratio: invalid fraction, using default.");
@@ -447,12 +464,16 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
             switch (dst->type) {
                 case MAT_LAMBERTIAN:
                     dst->properties.lambertian.albedo =
-                        parse_v3f(albedo, "material.albedo", (V3f){1, 1, 1});
+                        (Texture){.type = TEX_CONSTANT,
+                                  .colour = parse_v3f(albedo, "material.albedo",
+                                                      (V3f){1, 1, 1})};
                     break;
 
                 case MAT_METAL: {
                     dst->properties.metal.albedo =
-                        parse_v3f(albedo, "material.albedo", (V3f){1, 1, 1});
+                        (Texture){.type = TEX_CONSTANT,
+                                  .colour = parse_v3f(albedo, "material.albedo",
+                                                      (V3f){1, 1, 1})};
                     float f = parse_float(
                         cJSON_GetObjectItemCaseSensitive(mt, "fuzz"),
                         "material.fuzz", 0);
@@ -460,8 +481,10 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
                 } break;
 
                 case MAT_EMISSIVE:
-                    dst->properties.emissive.emission = parse_v3f(
-                        emission, "material.emission", (V3f){0, 0, 0});
+                    dst->properties.emissive.emission = (Texture){
+                        .type = TEX_CONSTANT,
+                        .colour = parse_v3f(emission, "material.emission",
+                                            (V3f){0, 0, 0})};
                     break;
 
                 case MAT_DIELECTRIC:
@@ -652,7 +675,7 @@ void free_scene(Scene *scene) {
         free_hittable(scene->bvh_root);
     }
 
-    for (int i = 0; i < scene->obj_count; i++) {
+    for (size_t i = 0; i < scene->obj_count; i++) {
         free(scene->objects[i].data);
     }
 

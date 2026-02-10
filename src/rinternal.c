@@ -12,10 +12,11 @@ static inline V3f ray_at(const Ray *ray, float t) {
 }
 
 // FIX:marking it inline gives linker error with debug??
-void set_face_normal(const Ray *r, const V3f *norm, HitRecord *record) {
+static void set_face_normal(const Ray *r, const V3f *norm, HitRecord *record) {
     record->front_face = v3f_dot(r->direction, *norm) < 0;
     record->normal = record->front_face ? *norm : v3f_neg(*norm);
 }
+
 // No global non-atomic counters here; use TLS + atomic totals.
 static bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
                        float tmax, HitRecord *record) {
@@ -39,6 +40,7 @@ static bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
     record->t = t;
     record->point = ray_at(ray, t);
     record->mat_index = sphere->mat_index;
+    record->uv = (V2f){-1, -1};
     V3f norm = v3f_divf(v3f_sub(record->point, sphere->center), sphere->radius);
     set_face_normal(ray, &norm, record);
 
@@ -58,6 +60,7 @@ static bool plane_hit(const Hittable *hittable, const Ray *ray, float tmin,
     record->t = t;
     record->point = ray_at(ray, t);
     record->mat_index = plane->mat_index;
+    record->uv = (V2f){-1, -1};
     set_face_normal(ray, &plane->normal, record);
 
     return true;
@@ -71,8 +74,8 @@ static bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
 
     if (det > -EPS && det < EPS) return false;
 
-    float idet = 1.0 / det;
-    V3f tvec = v3f_sub(ray->origin, tr->p1);
+    float idet = 1.0f / det;
+    V3f tvec = v3f_sub(ray->origin, tr->v1.v);
     float u = v3f_dot(tvec, pvec) * idet;
     if (u < 0 || u > 1) return false;
 
@@ -86,7 +89,9 @@ static bool triangle_hit(const Hittable *hittable, const Ray *ray, float tmin,
     record->t = t;
     record->point = ray_at(ray, t);
     record->mat_index = tr->mat_index;
-    set_face_normal(ray, &tr->normal, record);
+    record->uv = tr->v1.uv;  // using only 1 point for uv, barycentric stuff
+    set_face_normal(ray, &tr->v1.normal,
+                    record);  // using only 1 point as normal
 
     return true;
 }
@@ -111,6 +116,7 @@ static bool quad_hit(const Hittable *hittable, const Ray *ray, float tmin,
     record->t = t;
     record->point = P;
     record->mat_index = quad->mat_index;
+    record->uv = (V2f){-1, -1};
     set_face_normal(ray, &quad->normal, record);
 
     return true;
@@ -194,8 +200,8 @@ Hittable make_hittable_plane(Plane *p) {
 }
 
 Hittable make_hittable_triangle(Triangle *t) {
-    AABB box1 = aabb(t->p1, t->p2);
-    AABB box2 = aabb(t->p2, t->p3);
+    AABB box1 = aabb(t->v1.v, t->v2.v);
+    AABB box2 = aabb(t->v2.v, t->v3.v);
     return (Hittable){.hit = triangle_hit,
                       .box = aabb_join(box1, box2),
                       .type = HITTABLE_PRIMITIVE,

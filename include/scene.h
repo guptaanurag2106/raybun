@@ -29,7 +29,7 @@ typedef struct {
     int triangle_count;
 
     Hittable *objects;
-    int obj_count;
+    size_t obj_count;
     Hittable bvh_root;
 
     int material_count;

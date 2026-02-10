@@ -157,7 +157,7 @@ UTILS_DEF void timersub(const struct timeval *a, const struct timeval *b,
 #define PI_2 (PI / 2)
 #define PI_3_4 (3.0f * PI / 4)
 #define PI_2_3 (2.0f * PI / 3)
-#define EPS 1e-8
+/* #define EPS 1e-8 */
 
 #define DEG2RAD(_d) ((_d) * (PI / 180.0f))
 #define RAD2DEG(_r) ((_r) * (180.0f / PI))
@@ -286,7 +286,7 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
         T *items;        \
         size_t size;     \
         size_t capacity; \
-    } Name;
+    } Name
 
 #define vec_init(v)        \
     do {                   \

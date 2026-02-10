@@ -35,4 +35,4 @@ typedef struct {
 
 void calculate_camera_fields(Camera *cam);
 void init_work(Scene *scene, State *state, Work *work);
-void render_scene(Work *work, int thread_count);
+void render_scene(Work *work, long thread_count);

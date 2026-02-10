@@ -25,9 +25,14 @@ typedef struct {
 } Plane;
 
 typedef struct {
-    V3f p1, p2, p3;
+    V3f v;
+    V3f normal;
+    V2f uv;
+} Vertex;  // vertex for triangle
+
+typedef struct {
+    Vertex v1, v2, v3;
     V3f e1, e2;  // calculate internally edges
-    V3f normal;  // calculate internally
     int mat_index;
 } Triangle;
 
@@ -57,16 +62,26 @@ static inline MaterialType mat_to_string(const char *s) {
     return MAT_NONE;
 }
 
+typedef enum { TEX_CONSTANT, TEX_IMAGE } TextureType;
+
+typedef struct {
+    TextureType type;
+    union {
+        Colour colour;
+        // Image *image;
+    };
+} Texture;
+
 typedef struct {
     MaterialType type;
     union {
         struct {
-            Colour albedo;
+            Texture albedo;
             float fuzz;
         } metal;
 
         struct {
-            Colour albedo;
+            Texture albedo;
         } lambertian;
 
         struct {
@@ -74,7 +89,7 @@ typedef struct {
         } dielectric;
 
         struct {
-            Colour emission;
+            Texture emission;
         } emissive;
 
     } properties;
@@ -90,6 +105,7 @@ typedef struct {
     V3f point;
     V3f normal;
     float t;
+    V2f uv;
     bool front_face;
     int mat_index;
 } HitRecord;

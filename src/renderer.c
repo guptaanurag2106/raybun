@@ -21,7 +21,7 @@ static inline float linear_to_gamma(float linear_component) {
 }
 
 // argb
-uint32_t pack_colour(Colour colour) {
+static uint32_t pack_colour(Colour colour) {
     colour = v3f_clamp(colour, 0, 1);
     return (((uint8_t)(255)) << 24) |
            (((uint8_t)(linear_to_gamma(colour.x) * 255)) << 16) |
@@ -44,18 +44,22 @@ Colour ray_colour(Ray *ray, const Scene *scene, int depth, long *ray_count) {
     (*ray_count)++;
     if (depth <= 0) return (Colour){0, 0, 0};
     HitRecord record = {0};
+    record.uv = (V2f){-1, -1};
     if (scene_hit(ray, scene, 0.001, INFINITY,
                   &record)) {  // 0.001: floating pound rounding error, if the
-                               // origin is too close to surface then
-                               // intersection point may be inside the surface
-                               // then the ray will just bounce inside
-        Ray scattered;
-        Colour attenuation;
+        // origin is too close to surface then
+        // intersection point may be inside the surface
+        // then the ray will just bounce inside
+
+        Ray scattered = {0};
+        Colour attenuation = {0};
         Colour colour_emission = ORIGIN;
 
         Material *mat = &scene->materials[record.mat_index];
         if (mat->type == MAT_EMISSIVE) {
-            colour_emission = mat->properties.emissive.emission;
+            if (mat->properties.emissive.emission.type ==
+                TEX_CONSTANT)  // TODO: add TEX_IMAGE
+                colour_emission = mat->properties.emissive.emission.colour;
         }
 
         if (!scatter(mat, &record, ray, &attenuation, &scattered)) {
@@ -200,7 +204,7 @@ void init_work(Scene *scene, State *state, Work *work) {
     };
 }
 
-void render_scene(Work *work, int thread_count) {
+void render_scene(Work *work, long thread_count) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 

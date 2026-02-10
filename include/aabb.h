@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stddef.h>
+
 #include "common.h"
 #include "rinternal.h"
 #include "vec.h"
@@ -41,8 +43,8 @@ static inline AABB aabb_join(const AABB a, const AABB b) {
 
 static int g_sort_axis;
 static int comparator(const void *a, const void *b) {
-    Hittable *ah = (Hittable *)a;
-    Hittable *bh = (Hittable *)b;
+    const Hittable *ah = a;
+    const Hittable *bh = b;
     switch (g_sort_axis) {
         case 0:
             return (ah->box.xmin > bh->box.xmin) -
@@ -62,11 +64,12 @@ static int comparator(const void *a, const void *b) {
 }
 
 // construct bvh and put scene.bvh_root
-static Hittable construct_bvh(Hittable *hittable, int start, int end) {
+static inline Hittable construct_bvh(Hittable *hittable, size_t start,
+                                     size_t end) {
     if (hittable == NULL) return (Hittable){0};
     if (start == end) return (Hittable){0};
 
-    int count = end - start;
+    size_t count = end - start;
     if (count == 1) {
         return hittable[start];
     }
@@ -79,7 +82,7 @@ static Hittable construct_bvh(Hittable *hittable, int start, int end) {
     }
 
     AABB box = {0};
-    for (int i = start; i < end; i++) {
+    for (size_t i = start; i < end; i++) {
         box = aabb_join(box, hittable[i].box);
     }
 
@@ -100,7 +103,7 @@ static Hittable construct_bvh(Hittable *hittable, int start, int end) {
 
     qsort(hittable + start, end - start, sizeof(Hittable), comparator);
 
-    int mid = count / 2 + start;
+    size_t mid = count / 2 + start;
     node->left = construct_bvh(hittable, start, mid);
     node->right = construct_bvh(hittable, mid, end);
 
