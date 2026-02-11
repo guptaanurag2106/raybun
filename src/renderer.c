@@ -40,38 +40,53 @@ void calculate_camera_fields(Camera *cam) {
 }
 
 const Colour BACKGROUND = {0.1f, 0.1f, 0.1f};
-static Colour ray_colour(Ray *ray, const Scene *scene, int depth, long *ray_count) {
-    (*ray_count)++;
-    if (depth <= 0) return (Colour){0, 0, 0};
-    HitRecord record = {0};
-    record.uv = (V2f){-1, -1};
-    if (scene_hit(ray, scene, 0.001f, INFINITY,
-                  &record)) {  // 0.001: floating pound rounding error, if the
-        // origin is too close to surface then
-        // intersection point may be inside the surface
-        // then the ray will just bounce inside
 
-        Ray scattered = {0};
-        Colour attenuation = {0};
-        Colour colour_emission = ORIGIN;
+static Colour ray_colour(Ray *ray, const Scene *scene, int max_depth,
+                         long *ray_count) {
+    Colour throughput = {1.0f, 1.0f, 1.0f};
+    Colour final_colour = {0.0f, 0.0f, 0.0f};
+
+    for (int depth = 0; depth < max_depth; depth++) {
+        (*ray_count)++;
+        HitRecord record = {0};
+        record.uv = (V2f){-1, -1};
+
+        if (!scene_hit(ray, scene, 0.001f, INFINITY, &record)) {
+            // Hit nothing: return background contribution
+            final_colour =
+                v3f_add(final_colour, v3f_comp_mul(throughput, BACKGROUND));
+            break;
+        }
 
         Material *mat = &scene->materials.items[record.mat_index];
+
+        // Handle Emission
         if (mat->type == MAT_EMISSIVE) {
-            if (mat->properties.emissive.emission.type ==
-                TEX_CONSTANT)  // TODO: add TEX_IMAGE
-                colour_emission = mat->properties.emissive.emission.colour;
+            Colour emission = (mat->properties.emissive.emission.type ==
+                               TEX_CONSTANT)  // TODO: handle TEX_IMAGE
+                                  ? mat->properties.emissive.emission.colour
+                                  : (Colour){0, 0, 0};
+            final_colour =
+                v3f_add(final_colour, v3f_comp_mul(throughput, emission));
         }
 
+        // Handle Scattering
+        Ray scattered = {0};
+        Colour attenuation = {0};
         if (!scatter(mat, &record, ray, &attenuation, &scattered)) {
-            return colour_emission;
+            break;
         }
 
-        Colour scatter = v3f_comp_mul(
-            attenuation, ray_colour(&scattered, scene, depth - 1, ray_count));
-        return v3f_add(colour_emission, scatter);
+        throughput = v3f_comp_mul(throughput, attenuation);
+        *ray = scattered;
+        ray->length_sq = v3f_slength(ray->direction);
+        ray->inv_dir = v3f_inv(ray->direction);
+
+        // Russian Roulette or simple early exit for dark throughput
+        if (v3f_slength(throughput) < 1e-6f) break;
     }
 
-    return BACKGROUND;
+    return final_colour;
 }
 
 static void *render_tile(void *arg) {
@@ -118,8 +133,11 @@ static void *render_tile(void *arg) {
                             v3f_add(v3f_mulf(work->defocus_disk_u, p.x),
                                     v3f_mulf(work->defocus_disk_v, p.y)));
                     }
-                    Ray ray = {ray_origin, v3f_sub(pixel_center, cam.position),
-                               .inv_dir = ORIGIN};
+                    Ray ray = {
+                        .origin = ray_origin,
+                        .direction = v3f_sub(pixel_center, cam.position)};
+                    ray.length_sq = v3f_slength(ray.direction);
+                    ray.length = sqrtf(ray.length_sq);
                     ray.inv_dir = v3f_inv(ray.direction);
                     colour = v3f_add(
                         ray_colour(&ray, scene, work->max_depth, &ray_count),

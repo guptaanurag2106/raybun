@@ -99,6 +99,8 @@ typedef struct {
     V3f origin;
     V3f direction;
     V3f inv_dir;
+    float length_sq; // Squared length of direction
+    float length;    // Length of direction
 } Ray;
 
 typedef struct {

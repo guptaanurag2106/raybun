@@ -22,7 +22,7 @@ static bool sphere_hit(const Hittable *hittable, const Ray *ray, float tmin,
                        float tmax, HitRecord *record) {
     const Sphere *sphere = hittable->data;
     V3f oc = v3f_sub(sphere->center, ray->origin);
-    float a = v3f_slength(ray->direction);
+    float a = ray->length_sq;
     float h = v3f_dot(ray->direction, oc);
     float c = v3f_slength(oc) - sphere->radius * sphere->radius;
 
