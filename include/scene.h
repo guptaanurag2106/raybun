@@ -19,6 +19,8 @@ typedef struct {
     float viewport_h;
 } Camera;
 
+Vector(Hittable, Hittables);
+Vector(Material, Materials);
 typedef struct {
     unsigned int scene_crc;
     char *scene_json;
@@ -28,12 +30,10 @@ typedef struct {
     int quad_count;
     int triangle_count;
 
-    Hittable *objects;
-    size_t obj_count;
+    Hittables objects;
     Hittable bvh_root;
 
-    int material_count;
-    Material *materials;
+    Materials materials;
 
     Camera camera;
 } Scene;

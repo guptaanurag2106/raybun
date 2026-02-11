@@ -33,7 +33,7 @@ LD_RPATH += -Wl,-rpath,$(CJSON_BUILD)
 
 CFLAGS_DEBUG   = -Wall -Wextra -ggdb -std=c11 -DDEBUG -O2 -fno-omit-frame-pointer -fno-inline
 
-CFLAGS_RELEASE = -Wall -Wextra -O3 -std=c11 -march=native \
+CFLAGS_RELEASE = -Wall -Wextra -Wno-unused-variable -O3 -std=c11 -march=native \
                  -funroll-loops -flto -ffunction-sections \
                  -fdata-sections -ffast-math -DDEBUG
 

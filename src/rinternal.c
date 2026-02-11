@@ -176,6 +176,7 @@ static bool aabb_hit(const Hittable *h, const Ray *r, float tmin, float tmax,
 
 bool scene_hit(const Ray *r, const Scene *scene, float tmin, float tmax,
                HitRecord *record) {
+    if (!scene->bvh_root.hit) return false;
     return scene->bvh_root.hit(&scene->bvh_root, r, tmin, tmax, record);
 }
 

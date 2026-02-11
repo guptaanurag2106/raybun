@@ -26,7 +26,7 @@ void print_summary(const Scene *scene, const State *state) {
     Log(Log_Info, "load_scene: Loaded %d planes", scene->plane_count);
     Log(Log_Info, "load_scene: Loaded %d triangles", scene->triangle_count);
     Log(Log_Info, "load_scene: Loaded %d quads", scene->quad_count);
-    Log(Log_Info, "load_scene: Loaded %d materials", scene->material_count);
+    Log(Log_Info, "load_scene: Loaded %d materials", scene->materials.size);
 }
 
 // TODO: check what all actually needs to be normalized
@@ -56,9 +56,10 @@ static int parse_int(const cJSON *node, const char *ctx, int fallback) {
     return node->valueint;
 }
 
-static int parse_mat_index(const cJSON *node, int mat_count, const char *ctx) {
+static int parse_mat_index(const cJSON *node, size_t mat_count,
+                           const char *ctx) {
     if (!cJSON_IsNumber(node) || node->valueint < 0 ||
-        node->valueint >= mat_count) {
+        node->valueint >= (int)mat_count) {
         log_warn(temp_sprintf("%s: invalid material index.", ctx));
         return -1;
     }
@@ -107,9 +108,7 @@ static Triangle make_triangle(V3f p1, V3f p2, V3f p3, V3f n1, V3f n2, V3f n3,
                       .mat_index = mat_index};
 }
 
-Vector(Hittable, Hittables);
-static Hittables hv = {0};
-static inline void append_hittable(Hittable h) { vec_push(&hv, h); }
+static inline void append_hittable(Scene *scene, Hittable h) { vec_push(&scene->objects, h); }
 
 static void append_sphere(Scene *scene, Sphere sphere) {
     scene->sphere_count++;
@@ -117,7 +116,7 @@ static void append_sphere(Scene *scene, Sphere sphere) {
     *sphere_data = sphere;
 
     Hittable h = make_hittable_sphere(sphere_data);
-    append_hittable(h);
+    append_hittable(scene, h);
 }
 
 static void append_plane(Scene *scene, Plane plane) {
@@ -125,7 +124,7 @@ static void append_plane(Scene *scene, Plane plane) {
     Plane *plane_data = malloc(sizeof(Plane));
     *plane_data = plane;
     Hittable h = make_hittable_plane(plane_data);
-    append_hittable(h);
+    append_hittable(scene, h);
 }
 
 static void append_triangle(Scene *scene, Triangle triangle) {
@@ -133,7 +132,7 @@ static void append_triangle(Scene *scene, Triangle triangle) {
     Triangle *triangle_data = malloc(sizeof(Triangle));
     *triangle_data = triangle;
     Hittable h = make_hittable_triangle(triangle_data);
-    append_hittable(h);
+    append_hittable(scene, h);
 }
 
 static void append_quad(Scene *scene, Quad quad) {
@@ -141,7 +140,7 @@ static void append_quad(Scene *scene, Quad quad) {
     Quad *quad_data = malloc(sizeof(Quad));
     *quad_data = quad;
     Hittable h = make_hittable_quad(quad_data);
-    append_hittable(h);
+    append_hittable(scene, h);
 }
 
 // TODO: currently axis aligned box support transformations
@@ -179,11 +178,36 @@ static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
                 make_quad((V3f){minp.x, minp.y, minp.z}, dz, dx, mat_index));
 }
 
-static void add_model(Scene *scene, FILE *f, V3f position, float scale, int mi,
-                      const char *file_name) {
+Vector(char *, MatNames);
+static void parse_mtl(const char *name, MatNames *material_names,
+                      Materials *materials) {}
+
+static void add_model(Scene *scene, V3f position, float scale,
+                      const char *file_name, Materials *scene_mats) {
+    FILE *f;
+
+    if (file_name == NULL || strlen(file_name) == 0 ||
+        (f = fopen(file_name, "r")) == NULL) {
+        log_warn(temp_sprintf("Cannot open file %s: %s, skipping model",
+                              file_name, strerror(errno)));
+        return;
+    }
+
     char buf[512];
     size_t line_no = 0;
     size_t triangle_count = 0;
+
+    // TODO: multiple files in mtllib, multiple mtllib?
+    char *matllib = NULL;
+    int curr_mat_index = 0;
+
+    MatNames material_names = {0};
+    vec_push(&material_names, "default_obj_mat");
+    Material default_mat =
+        (Material){.type = MAT_LAMBERTIAN,
+                   .properties.lambertian.albedo =
+                       (Texture){.type = TEX_CONSTANT, .colour = ORIGIN}};
+    vec_push(scene_mats, default_mat);  // TODO: MAT_NONE
 
     Vector(V3f, Vertices);
     Vertices vs = {0};
@@ -274,31 +298,49 @@ static void add_model(Scene *scene, FILE *f, V3f position, float scale, int mi,
         /*     continue; */
         /* } */
 
-        if (strncmp(ptr, "mtllib", 6) == 0) {
-            log_warn("mtllib not supported in obj files");
+        if (strncmp(ptr, "mtllib ", 7) == 0) {
+            matllib = strdup(ptr + 7);
+            matllib[strcspn(matllib, "\r\n")] = 0;
+            parse_mtl(matllib, &material_names, scene_mats);
+            Log(Log_Info, "load_scene: mtllib using %s", matllib);
             continue;
         }
-        if (strncmp(ptr, "usemtl", 6) == 0) {
-            log_warn("usemtl not supported in obj files");
+
+        if (strncmp(ptr, "usemtl ", 7) == 0) {
+            /* char *curr_mtl = ptr + 7; */
+            /* curr_mtl[strcspn(curr_mtl, "\r\n")] = 0; */
+
+            /* Log(Log_Info, "load_scene: usemtl using %s in %s", curr_mtl, */
+            /*     matllib); */
+            /* size_t mat_index = */
+            /*     vec_search_first(&material_names, curr_mtl, strcmp); */
+            /* curr_mat_index = (int)mat_index; */
+            /* if (mat_index >= materials.size) { */
+            /*     Log(Log_Warn, */
+            /*         "load_scene: Could not find material %s in %s, using
+             * first", */
+            /*         curr_mtl, matllib); */
+            /*     curr_mat_index = 0; */
+            /* } */
+
             continue;
         }
 
         if (strncmp(ptr, "o ", 2) == 0) {
-            // Log(Log_Debug, "load_scene: Loading object %s from file %s",
-            //     ptr + 2, file_name);
+            Log(Log_Debug, "load_scene: Loading object %s from file %s",
+                ptr + 2, file_name);
             continue;
         }
 
-        // TODO: group<->material link efficient rendering?
+        // NOTE: group<->material link efficient rendering?
         if (strncmp(ptr, "g ", 2) == 0) {
-            // Log(Log_Debug, "load_scene: Loading group %s from file %s",
-            //     ptr + 2, file_name);
+            Log(Log_Debug, "load_scene: Loading group %s from file %s", ptr + 2,
+                file_name);
             continue;
         }
 
-        /* Log(Log_Warn, "load_scene: Unknown/Unsupported line '%s' in %s:%zu",
-         */
-        /*     buf, file_name, line_no); */
+        Log(Log_Warn, "load_scene: Unknown/Unsupported line '%s' in %s:%zu",
+            buf, file_name, line_no);
     }
 
     Log(Log_Info, "load_scene: Loaded %s with %d vertices and %d triangles",
@@ -308,6 +350,8 @@ static void add_model(Scene *scene, FILE *f, V3f position, float scale, int mi,
     vec_free(&vts);
     vec_free(&vns);
     vec_free(&vps);
+    vec_free(&material_names);
+    fclose(f);
 }
 
 static int parse_quad(Scene *scene, const cJSON *qnode) {
@@ -316,7 +360,7 @@ static int parse_quad(Scene *scene, const cJSON *qnode) {
     const cJSON *v = cJSON_GetObjectItemCaseSensitive(qnode, "v");
     const cJSON *mat_i = cJSON_GetObjectItemCaseSensitive(qnode, "material");
 
-    int mi = parse_mat_index(mat_i, scene->material_count, "quad.material");
+    int mi = parse_mat_index(mat_i, scene->materials.size, "quad.material");
     if (mi < 0) return 0;
 
     const V3f C = parse_v3f(corner, "quad.corner", (V3f){0});
@@ -333,7 +377,7 @@ static int parse_triangle(Scene *scene, const cJSON *tnode) {
     const cJSON *p3 = cJSON_GetObjectItemCaseSensitive(tnode, "p3");
     const cJSON *mat_i = cJSON_GetObjectItemCaseSensitive(tnode, "material");
 
-    int mi = parse_mat_index(mat_i, scene->material_count, "triangle.material");
+    int mi = parse_mat_index(mat_i, scene->materials.size, "triangle.material");
     if (mi < 0) return 0;
 
     const V3f P1 = parse_v3f(p1, "triangle.p1", (V3f){0});
@@ -360,6 +404,8 @@ char *read_compress_scene(const char *scene_file) {
 void load_scene(const char *scene_file_content, Scene *scene, State *state) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
+
+    scene->objects = (Hittables){0};
 
     cJSON *json = cJSON_Parse(scene_file_content);
 
@@ -442,9 +488,8 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
         cJSON_GetObjectItemCaseSensitive(json, "materials");
     if (cJSON_IsArray(materials)) {
         int N = cJSON_GetArraySize(materials);
-        scene->materials = malloc(sizeof(Material) * N);
+        scene->materials = (Materials){0};
 
-        int M = 0;
         for (int i = 0; i < N; i++) {
             const cJSON *mt = cJSON_GetArrayItem(materials, i);
             const cJSON *type = cJSON_GetObjectItemCaseSensitive(mt, "type");
@@ -453,56 +498,55 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
                 continue;
             }
 
-            Material *dst = &scene->materials[M];
-            dst->type = mat_to_string(type->valuestring);
+            Material dst = {0};
+            dst.type = string_to_mat(type->valuestring);
 
             const cJSON *albedo =
                 cJSON_GetObjectItemCaseSensitive(mt, "albedo");
             const cJSON *emission =
                 cJSON_GetObjectItemCaseSensitive(mt, "emission");
 
-            switch (dst->type) {
+            switch (dst.type) {
                 case MAT_LAMBERTIAN:
-                    dst->properties.lambertian.albedo =
+                    dst.properties.lambertian.albedo =
                         (Texture){.type = TEX_CONSTANT,
                                   .colour = parse_v3f(albedo, "material.albedo",
                                                       (V3f){1, 1, 1})};
                     break;
 
                 case MAT_METAL: {
-                    dst->properties.metal.albedo =
+                    dst.properties.metal.albedo =
                         (Texture){.type = TEX_CONSTANT,
                                   .colour = parse_v3f(albedo, "material.albedo",
                                                       (V3f){1, 1, 1})};
                     float f = parse_float(
                         cJSON_GetObjectItemCaseSensitive(mt, "fuzz"),
                         "material.fuzz", 0);
-                    dst->properties.metal.fuzz = clamp_float(f, 0, 1);
+                    dst.properties.metal.fuzz = clamp_float(f, 0, 1);
                 } break;
 
                 case MAT_EMISSIVE:
-                    dst->properties.emissive.emission = (Texture){
+                    dst.properties.emissive.emission = (Texture){
                         .type = TEX_CONSTANT,
                         .colour = parse_v3f(emission, "material.emission",
                                             (V3f){0, 0, 0})};
                     break;
 
                 case MAT_DIELECTRIC:
-                    dst->properties.dielectric.etai_eta =
+                    dst.properties.dielectric.etai_eta =
                         parse_float(cJSON_GetObjectItemCaseSensitive(
                                         mt, "refraction_index"),
                                     "material.refraction_index", 1);
                     break;
 
                 default:
-                    log_warn("material: unknown type, skipping.");
-                    continue;
+                    Log(Log_Error, "load_scene: material: unknown type %s",
+                        type->valuestring);
+                    exit(1);
             }
 
-            M++;
+            vec_push(&scene->materials, dst);
         }
-        scene->material_count = M;
-        scene->materials = realloc(scene->materials, sizeof(Material) * M);
     }
 
     const cJSON *objects = cJSON_GetObjectItemCaseSensitive(json, "objects");
@@ -519,7 +563,7 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
             const cJSON *s = cJSON_GetArrayItem(sitems, i);
             int mi =
                 parse_mat_index(cJSON_GetObjectItemCaseSensitive(s, "material"),
-                                scene->material_count, "sphere.material");
+                                scene->materials.size, "sphere.material");
             if (mi < 0) continue;
 
             const cJSON *center = cJSON_GetObjectItemCaseSensitive(s, "center");
@@ -546,7 +590,7 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
             const cJSON *p = cJSON_GetArrayItem(pitems, i);
             int mi =
                 parse_mat_index(cJSON_GetObjectItemCaseSensitive(p, "material"),
-                                scene->material_count, "plane.material");
+                                scene->materials.size, "plane.material");
             if (mi < 0) continue;
 
             Plane plane = {0};
@@ -587,7 +631,7 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
 
             int mi =
                 parse_mat_index(cJSON_GetObjectItemCaseSensitive(b, "material"),
-                                scene->material_count, "box.material");
+                                scene->materials.size, "box.material");
 
             if (mi < 0) continue;
 
@@ -602,28 +646,12 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
 
     const cJSON *mitems = cJSON_GetObjectItemCaseSensitive(objects, "models");
     if (cJSON_IsArray(mitems)) {
-        FILE *f;
         int N = cJSON_GetArraySize(mitems);
         for (int i = 0; i < N; i++) {
             const cJSON *m = cJSON_GetArrayItem(mitems, i);
 
             const char *file_name = parse_string(
                 cJSON_GetObjectItemCaseSensitive(m, "file"), "model.file");
-
-            if (file_name == NULL || strlen(file_name) == 0 ||
-                (f = fopen(file_name, "r")) == NULL) {
-                log_warn(temp_sprintf("Cannot open file %s: %s, skipping model",
-                                      file_name, strerror(errno)));
-                continue;
-            }
-
-            int mi =
-                parse_mat_index(cJSON_GetObjectItemCaseSensitive(m, "material"),
-                                scene->material_count, "model.material");
-            if (mi < 0) {
-                fclose(f);
-                continue;
-            };
 
             V3f position =
                 parse_v3f(cJSON_GetObjectItemCaseSensitive(m, "position"),
@@ -632,19 +660,15 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
             float scale = parse_float(
                 cJSON_GetObjectItemCaseSensitive(m, "scale"), "model.scale", 1);
 
-            add_model(scene, f, position, scale, mi, file_name);
-            fclose(f);
+            add_model(scene, position, scale, file_name, &scene->materials);
         }
     }
 
 END_PARSE:
     cJSON_Delete(json);
 
-    scene->obj_count = hv.size;
-    // Transfer ownership: Reset hv so it doesn't point to the same memory
-    scene->objects = vec_release(&hv);
-
-    scene->bvh_root = construct_bvh(scene->objects, 0, scene->obj_count);
+    scene->bvh_root =
+        construct_bvh(scene->objects.items, 0, scene->objects.size);
 
     state->image =
         aligned_alloc(64, state->width * state->height * sizeof(uint32_t));
@@ -675,15 +699,10 @@ void free_scene(Scene *scene) {
         free_hittable(scene->bvh_root);
     }
 
-    for (size_t i = 0; i < scene->obj_count; i++) {
-        free(scene->objects[i].data);
+    for (size_t i = 0; i < scene->objects.size; i++) {
+        free(scene->objects.items[i].data);
     }
 
-    free(scene->objects);
-    scene->objects = NULL;
-    scene->obj_count = 0;
-
-    free(scene->materials);
-    scene->materials = NULL;
-    scene->material_count = 0;
+    vec_free(&scene->objects);
+    vec_free(&scene->materials);
 }

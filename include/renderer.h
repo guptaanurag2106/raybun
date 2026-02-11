@@ -17,7 +17,7 @@ typedef struct {
     _Atomic long ray_count;
     _Atomic int tile_finished;
 
-    int width;
+    size_t width;
     int samples_per_pixel;
     int max_depth;
 

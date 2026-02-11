@@ -242,16 +242,19 @@ UTILS_DEF uint32_t rng_u32(RNG *rng) {
     rng->state = x;
     return x;
 }
+
 UTILS_DEF uint32_t rng_u32_tls() { return rng_u32(&rng_state); }
 
 UTILS_DEF float rng_f32(RNG *rng) {
     return (rng_u32(rng) >> 8) * (1.0f / 16777216.0f);
 }
+
 UTILS_DEF float rng_f32_tls() { return rng_f32(&rng_state); }
 
 UTILS_DEF float rngf_range(RNG *rng, float min, float max) {
     return min + (max - min) * rng_f32(rng);
 }
+
 UTILS_DEF float rngf_range_tls(float min, float max) {
     return rngf_range(&rng_state, min, max);
 }
@@ -259,6 +262,7 @@ UTILS_DEF float rngf_range_tls(float min, float max) {
 UTILS_DEF int rngi_range(RNG *rng, int min, int max) {
     return (int)rngf_range(rng, min, max + 1);
 }
+
 UTILS_DEF int rngi_range_tls(int min, int max) {
     return rngi_range(&rng_state, min, max);
 }
@@ -267,7 +271,7 @@ int calculate_infix(const char *expr);  // 34+5*10+3 -> 88 just +-*/%
 
 UTILS_DEF float triangle_area_float(float x1, float y1, float x2, float y2,
                                     float x3, float y3) {
-    return fabs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0);
+    return fabsf((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0f);
 }
 
 UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
@@ -329,6 +333,15 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
         (v)->items[i] = (v)->items[(v)->size - 1]; \
         --(v)->size;                               \
     } while (0)
+
+#define vec_search_first(v, item, cmp_fn)                \
+    ({                                                   \
+        size_t i = 0;                                    \
+        for (; (v)->size; i++) {                         \
+            if (cmp_fn(item, (v)->items[i]) == 0) break; \
+        }                                                \
+        i;                                               \
+    })
 
 #define vec_clear(v) ((v)->size = 0)
 

@@ -47,14 +47,14 @@ typedef struct {
 } Quad;
 
 typedef enum {
-    MAT_NONE,
+    MAT_NONE,  // TODO: MAT_NONE points to default texture?
     MAT_LAMBERTIAN,
     MAT_METAL,
     MAT_DIELECTRIC,
     MAT_EMISSIVE
 } MaterialType;
 
-static inline MaterialType mat_to_string(const char *s) {
+static inline MaterialType string_to_mat(const char *s) {
     if (strcmp(s, "metal") == 0) return MAT_METAL;
     if (strcmp(s, "dielectric") == 0) return MAT_DIELECTRIC;
     if (strcmp(s, "lambertian") == 0) return MAT_LAMBERTIAN;

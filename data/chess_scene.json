@@ -47,7 +47,6 @@
       {
         "file": "data/chess_scene_pieces/chess_scene_pieces.obj",
         "position": [0, 0, -30],
-        "material": 6,
         "scale": 4
       }
     ]

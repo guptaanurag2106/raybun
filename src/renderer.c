@@ -39,13 +39,13 @@ void calculate_camera_fields(Camera *cam) {
     cam->focal_length = 1 / tanf(cam->fov / 2);
 }
 
-const Colour BACKGROUND = {0.1, 0.1, 0.1};
-Colour ray_colour(Ray *ray, const Scene *scene, int depth, long *ray_count) {
+const Colour BACKGROUND = {0.1f, 0.1f, 0.1f};
+static Colour ray_colour(Ray *ray, const Scene *scene, int depth, long *ray_count) {
     (*ray_count)++;
     if (depth <= 0) return (Colour){0, 0, 0};
     HitRecord record = {0};
     record.uv = (V2f){-1, -1};
-    if (scene_hit(ray, scene, 0.001, INFINITY,
+    if (scene_hit(ray, scene, 0.001f, INFINITY,
                   &record)) {  // 0.001: floating pound rounding error, if the
         // origin is too close to surface then
         // intersection point may be inside the surface
@@ -55,7 +55,7 @@ Colour ray_colour(Ray *ray, const Scene *scene, int depth, long *ray_count) {
         Colour attenuation = {0};
         Colour colour_emission = ORIGIN;
 
-        Material *mat = &scene->materials[record.mat_index];
+        Material *mat = &scene->materials.items[record.mat_index];
         if (mat->type == MAT_EMISSIVE) {
             if (mat->properties.emissive.emission.type ==
                 TEX_CONSTANT)  // TODO: add TEX_IMAGE
@@ -74,7 +74,7 @@ Colour ray_colour(Ray *ray, const Scene *scene, int depth, long *ray_count) {
     return BACKGROUND;
 }
 
-void *render_tile(void *arg) {
+static void *render_tile(void *arg) {
     Work *work = arg;
     const Scene *scene = work->scene;
     Camera cam = scene->camera;
@@ -136,8 +136,8 @@ void *render_tile(void *arg) {
 }
 
 void init_work(Scene *scene, State *state, Work *work) {
-    const int width = state->width;
-    const int height = state->height;
+    const size_t width = state->width;
+    const size_t height = state->height;
 
     Camera cam = scene->camera;
 
@@ -170,8 +170,8 @@ void init_work(Scene *scene, State *state, Work *work) {
     }
 
     int count = 0;
-    for (int j = 0; j < height; j += TILE_HEIGHT) {
-        for (int i = 0; i < width; i += TILE_WIDTH) {
+    for (size_t j = 0; j < height; j += TILE_HEIGHT) {
+        for (size_t i = 0; i < width; i += TILE_WIDTH) {
             tiles[count++] = (Tile){
                 .x = i,
                 .y = j,
