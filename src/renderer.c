@@ -50,7 +50,9 @@ static Colour ray_colour(Ray *ray, const Scene *scene, int max_depth,
         (*ray_count)++;
         HitRecord record = {0};
         record.uv = (V2f){-1, -1};
-
+        // 0.001: floating pound rounding error, if the origin is too close to
+        // surface then intersection point may be inside the surface then the
+        // ray will just bounce inside
         if (!scene_hit(ray, scene, 0.001f, INFINITY, &record)) {
             // Hit nothing: return background contribution
             final_colour =

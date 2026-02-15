@@ -1,5 +1,5 @@
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef UTILS_H_
+#define UTILS_H_
 
 #include <assert.h>
 #include <ctype.h>
@@ -402,7 +402,7 @@ void reset_Ivector(Ivector *vector);
 #ifdef _cplusplus
 };
 #endif
-#endif  // UTILS_H
+#endif  // UTILS_H_
 
 #ifdef UTILS_IMPLEMENTATION
 

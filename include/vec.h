@@ -1,5 +1,5 @@
-#ifndef VEC_H
-#define VEC_H
+#ifndef VEC_H_
+#define VEC_H_
 
 #include <math.h>
 #include <stdarg.h>
@@ -165,4 +165,4 @@ VECDEF V3f v3f_refract(const V3f uv, const V3f n, float etai_eta) {
 #ifdef _cplusplus
 }
 #endif
-#endif  // VEC_H
+#endif  // VEC_H_
