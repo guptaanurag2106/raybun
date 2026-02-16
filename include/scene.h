@@ -1,4 +1,5 @@
 #pragma once
+#include "arena.h"
 #include "common.h"
 #include "state.h"
 #include "vec.h"
@@ -22,6 +23,7 @@ typedef struct {
 Vector(Hittable, Hittables);
 Vector(Material, Materials);
 typedef struct {
+    Arena arena;
     unsigned int scene_crc;
     char *scene_json;
 

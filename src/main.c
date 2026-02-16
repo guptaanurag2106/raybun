@@ -7,6 +7,8 @@
 #include "imagerw.h"
 #include "libmicrohttpd-1.0.1/src/include/microhttpd.h"
 #include "renderer.h"
+#define ARENA_IMPLEMENTATION
+#include "arena.h"
 #include "scene.h"
 #include "state.h"
 #define UTILS_IMPLEMENTATION
@@ -50,6 +52,7 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
 
     Scene *scene = malloc(sizeof(Scene));
     memset(scene, 0, sizeof(Scene));
+    scene->arena = arena_create(1024 * 1024 * 256);  // 256MB
     State *state = malloc(sizeof(State));
 
     char *file_content = read_compress_scene(perf_json_file);
@@ -188,6 +191,7 @@ int main(int argc, char **argv) {
     if (mode == 0 || mode == 2) {
         scene = malloc(sizeof(Scene));
         memset(scene, 0, sizeof(Scene));
+        scene->arena = arena_create(1024 * 1024 * 256);  // 256MB
         state = malloc(sizeof(State));
 
         scene_json = read_compress_scene(scene_json_file);

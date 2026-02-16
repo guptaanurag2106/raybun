@@ -108,11 +108,13 @@ static Triangle make_triangle(V3f p1, V3f p2, V3f p3, V3f n1, V3f n2, V3f n3,
                       .mat_index = mat_index};
 }
 
-static inline void append_hittable(Scene *scene, Hittable h) { vec_push(&scene->objects, h); }
+static inline void append_hittable(Scene *scene, Hittable h) {
+    vec_push(&scene->objects, h);
+}
 
 static void append_sphere(Scene *scene, Sphere sphere) {
     scene->sphere_count++;
-    Sphere *sphere_data = malloc(sizeof(Sphere));
+    Sphere *sphere_data = ARENA_PUSH_STRUCT(&scene->arena, Sphere);
     *sphere_data = sphere;
 
     Hittable h = make_hittable_sphere(sphere_data);
@@ -121,7 +123,7 @@ static void append_sphere(Scene *scene, Sphere sphere) {
 
 static void append_plane(Scene *scene, Plane plane) {
     scene->plane_count++;
-    Plane *plane_data = malloc(sizeof(Plane));
+    Plane *plane_data = ARENA_PUSH_STRUCT(&scene->arena, Plane);
     *plane_data = plane;
     Hittable h = make_hittable_plane(plane_data);
     append_hittable(scene, h);
@@ -129,7 +131,7 @@ static void append_plane(Scene *scene, Plane plane) {
 
 static void append_triangle(Scene *scene, Triangle triangle) {
     scene->triangle_count++;
-    Triangle *triangle_data = malloc(sizeof(Triangle));
+    Triangle *triangle_data = ARENA_PUSH_STRUCT(&scene->arena, Triangle);
     *triangle_data = triangle;
     Hittable h = make_hittable_triangle(triangle_data);
     append_hittable(scene, h);
@@ -137,7 +139,7 @@ static void append_triangle(Scene *scene, Triangle triangle) {
 
 static void append_quad(Scene *scene, Quad quad) {
     scene->quad_count++;
-    Quad *quad_data = malloc(sizeof(Quad));
+    Quad *quad_data = ARENA_PUSH_STRUCT(&scene->arena, Quad);
     *quad_data = quad;
     Hittable h = make_hittable_quad(quad_data);
     append_hittable(scene, h);
@@ -339,8 +341,8 @@ static void add_model(Scene *scene, V3f position, float scale,
             continue;
         }
 
-        Log(Log_Warn, "load_scene: Unknown/Unsupported line '%s' in %s:%zu",
-            buf, file_name, line_no);
+        // Log(Log_Warn, "load_scene: Unknown/Unsupported line '%s' in %s:%zu",
+        //     buf, file_name, line_no);
     }
 
     Log(Log_Info, "load_scene: Loaded %s with %d vertices and %d triangles",
@@ -667,8 +669,8 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
 END_PARSE:
     cJSON_Delete(json);
 
-    scene->bvh_root =
-        construct_bvh(scene->objects.items, 0, scene->objects.size);
+    scene->bvh_root = construct_bvh(&scene->arena, scene->objects.items, 0,
+                                    scene->objects.size);
 
     state->image =
         aligned_alloc(64, state->width * state->height * sizeof(uint32_t));
@@ -682,26 +684,10 @@ END_PARSE:
     Log(Log_Info, "load_scene: Loaded scene in %fms", ms);
 }
 
-static void free_hittable(Hittable h) {
-    // Primitives are freed separately
-    if (h.type == HITTABLE_BVH) {
-        BVH_Node *node = h.data;
-        free_hittable(node->left);
-        free_hittable(node->right);
-        free(node);
-    }
-}
-
 void free_scene(Scene *scene) {
     if (!scene) return;
 
-    if (scene->bvh_root.hit) {
-        free_hittable(scene->bvh_root);
-    }
-
-    for (size_t i = 0; i < scene->objects.size; i++) {
-        free(scene->objects.items[i].data);
-    }
+    arena_destroy(&scene->arena);
 
     vec_free(&scene->objects);
     vec_free(&scene->materials);

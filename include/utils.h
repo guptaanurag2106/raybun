@@ -19,13 +19,11 @@ extern "C" {
 #endif
 
 #ifndef UTILS_DEF
-#define UTILS_DEF static inline
-#endif
-
 #ifdef UTILS_IMPLEMENTATION
-#define UTILS_EXTERN
+#define UTILS_DEF
 #else
-#define UTILS_EXTERN extern
+#define UTILS_DEF extern
+#endif
 #endif
 
 #if defined(_MSC_VER)
@@ -50,29 +48,14 @@ enum Log_Level {
 };
 
 static enum Log_Level _base_log_level = Log_Trace;
-static FILE *_log_output_file = NULL;
 
-UTILS_DEF void Log_set_level(enum Log_Level level) { _base_log_level = level; }
-
-UTILS_DEF int Log_set_out_file(const char *out_file) {
-    if (_log_output_file != NULL) {
-        fclose(_log_output_file);  // Close the previous log file if it was open
-    }
-
-    if (out_file != NULL && strlen(out_file) > 0) {
-        _log_output_file = fopen(out_file, "a");
-        if (_log_output_file == NULL) {
-            fprintf(stderr, "[ERROR] Can't open output file %s, e: %s\n",
-                    out_file, strerror(errno));
-            return -1;
-        }
-    } else {
-        _log_output_file = NULL;  // Log to console if no file is provided
-    }
-    return 0;
+static inline void Log_set_level(enum Log_Level level) {
+    _base_log_level = level;
 }
 
-void Log(enum Log_Level level, const char *format, ...);
+UTILS_DEF int Log_set_out_file(const char *out_file);
+
+UTILS_DEF void Log(enum Log_Level level, const char *format, ...);
 
 // ----------------------------------------------------------------------------
 //  General Utils
@@ -132,16 +115,16 @@ void Log(enum Log_Level level, const char *format, ...);
 
 #define UNUSED(x) (void)(x)
 
-UTILS_DEF char *shift(int *argc, char ***argv) {
+static inline char *shift(int *argc, char ***argv) {
     ASSERT(*argc > 0);
     (*argc)--;
     return *((*argv)++);
 }
 
-char *generate_uuid();
+UTILS_DEF char *generate_uuid();
 
-UTILS_DEF void timersub(const struct timeval *a, const struct timeval *b,
-                        struct timeval *result) {
+static inline void timersub(const struct timeval *a, const struct timeval *b,
+                            struct timeval *result) {
     result->tv_sec = a->tv_sec - b->tv_sec;
     result->tv_usec = a->tv_usec - b->tv_usec;
     if (result->tv_usec < 0) {
@@ -176,45 +159,35 @@ UTILS_DEF void timersub(const struct timeval *a, const struct timeval *b,
         (_i == _x) ? _i : (_x > 0 ? _i : _i - 1); \
     })
 
-UTILS_DEF float lerp_float(float start, float end, float t) {
+static inline float lerp_float(float start, float end, float t) {
     return start + t * (end - start);
 }
 
-#define CLAMP_TYPE(type)                                    \
-    UTILS_DEF type clamp_##type(type v, type lo, type hi) { \
-        const type _v = (v);                                \
-        const type _lo = (lo);                              \
-        const type _hi = (hi);                              \
-        if (_v < _lo) return _lo;                           \
-        if (_v > _hi) return _hi;                           \
-        return _v;                                          \
+#define CLAMP_TYPE(type)                                        \
+    static inline type clamp_##type(type v, type lo, type hi) { \
+        const type _v = (v);                                    \
+        const type _lo = (lo);                                  \
+        const type _hi = (hi);                                  \
+        if (_v < _lo) return _lo;                               \
+        if (_v > _hi) return _hi;                               \
+        return _v;                                              \
     }
 
 CLAMP_TYPE(int)
 CLAMP_TYPE(float)
 
-UTILS_DEF bool is_number(const char *s) {
-    if (s == NULL || *s == '\0') return false;
-
-    if (*s == '-') s++;
-    if (*s == '\0') return false;
-    while (*s) {
-        if (*s < '0' || *s > '9') return false;
-        s++;
-    }
-    return true;
-}
+UTILS_DEF bool is_number(const char *s);
 
 // warn: no modulus: wrap when just went beyond boundary
-#define WRAP_TYPE(type)                                          \
-    UTILS_DEF type wrap_##type(type value, type min, type max) { \
-        const type _v = (value);                                 \
-        const type _min = (min);                                 \
-        const type _max = (max);                                 \
-        if (_max <= _min) return _v;                             \
-        if (_v < _min) return _v + (_max - _min);                \
-        if (_v > _max) return _v - (_max - _min);                \
-        return _v;                                               \
+#define WRAP_TYPE(type)                                              \
+    static inline type wrap_##type(type value, type min, type max) { \
+        const type _v = (value);                                     \
+        const type _min = (min);                                     \
+        const type _max = (max);                                     \
+        if (_max <= _min) return _v;                                 \
+        if (_v < _min) return _v + (_max - _min);                    \
+        if (_v > _max) return _v - (_max - _min);                    \
+        return _v;                                                   \
     }
 
 WRAP_TYPE(int)
@@ -225,16 +198,16 @@ typedef struct RNG {
     uint32_t state;
 } RNG;
 
-UTILS_TLS static RNG rng_state = (RNG){0x12345678u};
+static RNG rng_state = (RNG){0x12345678u};
 
-UTILS_DEF void rng_seed(RNG *rng, uint32_t seed) {
+static inline void rng_seed(RNG *rng, uint32_t seed) {
     rng->state = seed ? seed : 0x12345678u;
 }
-UTILS_DEF void rng_seed_tls(uint32_t seed) {
+static inline void rng_seed_tls(uint32_t seed) {
     rng_state = (RNG){seed ? seed : 0x12345678u};
 }
 
-UTILS_DEF uint32_t rng_u32(RNG *rng) {
+static inline uint32_t rng_u32(RNG *rng) {
     uint32_t x = rng->state;
     x ^= x << 13;
     x ^= x >> 17;
@@ -243,47 +216,37 @@ UTILS_DEF uint32_t rng_u32(RNG *rng) {
     return x;
 }
 
-UTILS_DEF uint32_t rng_u32_tls() { return rng_u32(&rng_state); }
+static inline uint32_t rng_u32_tls() { return rng_u32(&rng_state); }
 
-UTILS_DEF float rng_f32(RNG *rng) {
+static inline float rng_f32(RNG *rng) {
     return (rng_u32(rng) >> 8) * (1.0f / 16777216.0f);
 }
 
-UTILS_DEF float rng_f32_tls() { return rng_f32(&rng_state); }
+static inline float rng_f32_tls() { return rng_f32(&rng_state); }
 
-UTILS_DEF float rngf_range(RNG *rng, float min, float max) {
+static inline float rngf_range(RNG *rng, float min, float max) {
     return min + (max - min) * rng_f32(rng);
 }
 
-UTILS_DEF float rngf_range_tls(float min, float max) {
+static inline float rngf_range_tls(float min, float max) {
     return rngf_range(&rng_state, min, max);
 }
 
-UTILS_DEF int rngi_range(RNG *rng, int min, int max) {
+static inline int rngi_range(RNG *rng, int min, int max) {
     return (int)rngf_range(rng, min, max + 1);
 }
 
-UTILS_DEF int rngi_range_tls(int min, int max) {
+static inline int rngi_range_tls(int min, int max) {
     return rngi_range(&rng_state, min, max);
 }
 
-int calculate_infix(const char *expr);  // 34+5*10+3 -> 88 just +-*/%
+UTILS_DEF int calculate_infix(const char *expr);  // 34+5*10+3 -> 88 just +-*/%
 
 UTILS_DEF float triangle_area_float(float x1, float y1, float x2, float y2,
-                                    float x3, float y3) {
-    return fabsf((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0f);
-}
+                                    float x3, float y3);
 
 UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
-                                  float x3, float y3, float x, float y) {
-    float A = triangle_area_float(x1, y1, x2, y2, x3, y3);
-    float A1 = triangle_area_float(x, y, x2, y2, x3, y3);
-    float A2 = triangle_area_float(x1, y1, x, y, x3, y3);
-    float A3 = triangle_area_float(x1, y1, x2, y2, x, y);
-
-    // Check if sum of A1, A2 and A3 is same as A
-    return (A == A1 + A2 + A3);
-}
+                                  float x3, float y3, float x, float y);
 
 #define Vector(T, Name)  \
     typedef struct {     \
@@ -365,39 +328,23 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
 // ----------------------------------------------------------------------------
 //  String Utils
 // ----------------------------------------------------------------------------
-char *strdup(const char *src);
+UTILS_DEF char *strdup(const char *src);
 
 #define UTILS_MAX_TEMP_SIZE 1024 * 100
-char *combine_charp(const char *str1, const char *str2);
+UTILS_DEF char *combine_charp(const char *str1, const char *str2);
 // Will use the utils_static_temp_buffer and reset it everytime its filled
 #define COMBINE(separator, ...) \
     combine_strings_with_sep_(separator, __VA_ARGS__, NULL)
 // Will use the utils_static_temp_buffer and reset it everytime its filled,
 // last va_arg should be NULL
-char *combine_strings_with_sep_(const char *separator, ...);
+UTILS_DEF char *combine_strings_with_sep_(const char *separator, ...);
 // Will use the utils_static_temp_buffer and reset it everytime its filled
-char *temp_sprintf(const char *format, ...);
+UTILS_DEF char *temp_sprintf(const char *format, ...);
 
 // ----------------------------------------------------------------------------
 //  File Utils
 // ----------------------------------------------------------------------------
-char *read_entire_file(const char *filename);
-
-// ----------------------------------------------------------------------------
-//  Vector Utils
-// ----------------------------------------------------------------------------
-typedef struct {
-    int *data;
-    size_t size;
-    size_t capacity;
-} Ivector;
-
-Ivector *init_Ivector(size_t init_cap);
-void resize_Ivector(Ivector *vector, size_t new_capacity);
-void push_back_Ivector(Ivector *vector, int val);
-int pop_back_Ivector(Ivector *vector);
-int get_Ivector(Ivector *vector, size_t pos);
-void reset_Ivector(Ivector *vector);
+UTILS_DEF char *read_entire_file(const char *filename);
 
 #ifdef _cplusplus
 };
@@ -406,7 +353,27 @@ void reset_Ivector(Ivector *vector);
 
 #ifdef UTILS_IMPLEMENTATION
 
-void Log(enum Log_Level level, const char *format, ...) {
+static FILE *_log_output_file = NULL;
+
+UTILS_DEF int Log_set_out_file(const char *out_file) {
+    if (_log_output_file != NULL) {
+        fclose(_log_output_file);  // Close the previous log file if it was open
+    }
+
+    if (out_file != NULL && strlen(out_file) > 0) {
+        _log_output_file = fopen(out_file, "a");
+        if (_log_output_file == NULL) {
+            fprintf(stderr, "[ERROR] Can't open output file %s, e: %s\n",
+                    out_file, strerror(errno));
+            return -1;
+        }
+    } else {
+        _log_output_file = NULL;  // Log to console if no file is provided
+    }
+    return 0;
+}
+
+UTILS_DEF void Log(enum Log_Level level, const char *format, ...) {
     if (level < _base_log_level) return;
     FILE *out = stdout;
     if (level >= Log_Warn) out = stderr;
@@ -445,7 +412,7 @@ void Log(enum Log_Level level, const char *format, ...) {
     fprintf(out, "\n");
 }
 
-char *generate_uuid() {
+UTILS_DEF char *generate_uuid() {
     char v[] = {'0', '1', '2', '3', '4', '5', '6', '7',
                 '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
     char *buf = (char *)malloc(sizeof(char) * (37));
@@ -466,6 +433,18 @@ char *generate_uuid() {
     buf[36] = '\0';
 
     return buf;
+}
+
+UTILS_DEF bool is_number(const char *s) {
+    if (s == NULL || *s == '\0') return false;
+
+    if (*s == '-') s++;
+    if (*s == '\0') return false;
+    while (*s) {
+        if (*s < '0' || *s > '9') return false;
+        s++;
+    }
+    return true;
 }
 
 int calculate_infix_apply_operator(int a, int b, char op) {
@@ -498,7 +477,8 @@ int calculate_infix_precedence(char op) {
             return 0;
     }
 }
-int calculate_infix(const char *expr) {
+
+UTILS_DEF int calculate_infix(const char *expr) {
     int values[100];
     char ops[100];
     int vtop = -1, optop = -1;
@@ -543,7 +523,23 @@ int calculate_infix(const char *expr) {
     return values[vtop];
 }
 
-char *strdup(const char *src) {
+UTILS_DEF float triangle_area_float(float x1, float y1, float x2, float y2,
+                                    float x3, float y3) {
+    return fabsf((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0f);
+}
+
+UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
+                                  float x3, float y3, float x, float y) {
+    float A = triangle_area_float(x1, y1, x2, y2, x3, y3);
+    float A1 = triangle_area_float(x, y, x2, y2, x3, y3);
+    float A2 = triangle_area_float(x1, y1, x, y, x3, y3);
+    float A3 = triangle_area_float(x1, y1, x2, y2, x, y);
+
+    // Check if sum of A1, A2 and A3 is same as A
+    return (A == A1 + A2 + A3);
+}
+
+UTILS_DEF char *strdup(const char *src) {
     if (src == NULL) return NULL;
 
     size_t len = strlen(src);
@@ -562,11 +558,11 @@ char *strdup(const char *src) {
 static char utils_static_temp_buffer[UTILS_MAX_TEMP_SIZE];
 static uint32_t utils_static_temp_buffer_pos = 0;
 
-char *combine_charp(const char *str1, const char *str2) {
+UTILS_DEF char *combine_charp(const char *str1, const char *str2) {
     return temp_sprintf("%s%s", str1, str2);
 }
 
-char *combine_strings_with_sep_(const char *separator, ...) {
+UTILS_DEF char *combine_strings_with_sep_(const char *separator, ...) {
     va_list args;
 
     // Calculate length
@@ -624,7 +620,7 @@ char *combine_strings_with_sep_(const char *separator, ...) {
     return start;
 }
 
-char *temp_sprintf(const char *format, ...) {
+UTILS_DEF char *temp_sprintf(const char *format, ...) {
     va_list args;
     va_start(args, format);
     int n = vsnprintf(NULL, 0, format, args);
@@ -655,7 +651,7 @@ char *temp_sprintf(const char *format, ...) {
     return ret;
 }
 
-char *read_entire_file(const char *filename) {
+UTILS_DEF char *read_entire_file(const char *filename) {
     if (filename == NULL || strlen(filename) == 0) {
         Log(Log_Warn, "read_entire_file: Invalid file name");
         return NULL;
@@ -683,60 +679,6 @@ char *read_entire_file(const char *filename) {
     fclose(f);
 
     return contents;
-}
-
-Ivector *init_Ivector(size_t init_cap) {
-    Ivector *vector = (Ivector *)malloc(sizeof(Ivector));
-    if (vector == NULL) {
-        Log(Log_Error, "init_Ivector: Could not allocate Ivector");
-        exit(1);
-    }
-
-    vector->data = (int *)malloc(sizeof(int) * init_cap);
-    vector->size = 0;
-    vector->capacity = init_cap;
-
-    return vector;
-}
-
-void resize_Ivector(Ivector *vector, size_t new_capacity) {
-    vector->data = (int *)realloc(vector->data, sizeof(int) * new_capacity);
-
-    vector->capacity = new_capacity;
-}
-
-void push_back_Ivector(Ivector *vector, int val) {
-    if (vector->size >= vector->capacity) {
-        resize_Ivector(vector, vector->size * 2);
-    }
-    vector->data[vector->size++] = val;
-}
-
-int pop_back_Ivector(Ivector *vector) {
-    if (vector->size == 0) {
-        Log(Log_Error, "Ivector_pop_back: cannot pop from empty vector");
-        exit(1);
-    }
-
-    int val = vector->data[vector->size - 1];
-    vector->size--;
-    return val;
-}
-
-int get_Ivector(Ivector *vector, size_t pos) {
-    if (pos >= vector->size) {
-        Log(Log_Error,
-            temp_sprintf("Ivector_get: index %zu out of bounds (%zu)", pos,
-                         vector->size));
-        exit(1);
-    }
-    return vector->data[pos];
-}
-
-void reset_Ivector(Ivector *vector) {
-    free(vector->data);
-    vector->size = 0;
-    vector->capacity = 0;
 }
 
 #endif  // UTILS_IMPLEMENTATION

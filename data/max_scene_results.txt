@@ -32,6 +32,8 @@ AABB hits:      1.053T
 Time:           5965 sec  (99 minutes)
 Cost:           0.003584 ms/ray
 
+------------------------------------------------------------------------------------------------------------------------
+
 With tiles, additional thread and better RNG func:
 [INFO] load_scene: Loaded data/max_scene.json in 1.304000ms
 [INFO] load_scene: Creating image of size 3840 x 2160
@@ -50,6 +52,7 @@ AABB hits:      1.051T
 Time:           4723 sec  (79 minutes)
 Cost:           0.002838 ms/ray
 
+------------------------------------------------------------------------------------------------------------------------
 
 Multithreading, with smaller scenes
 6 threads: 
@@ -64,27 +67,49 @@ Multithreading, with smaller scenes
 [INFO] Running over 6 threads
 [INFO] Rendered 486450910 rays in 454842ms or 0.000935ms/ray
 
+---
+
 3 threads:
-[INFO] load_scene: Loaded data/max_scene.json in 0.196000ms
-[INFO] load_scene: Creating image of size 3840 x 2160
-[INFO] load_scene: Loaded 30 spheres
-[INFO] load_scene: Loaded 0 planes
-[INFO] load_scene: Loaded 10 triangles
-[INFO] load_scene: Loaded 60 quads
-[INFO] load_scene: Loaded 7 materials
-[INFO] Breaking into 510 tiles
 [INFO] Running over 3 threads
 [INFO] Rendered 486430317 rays in 545059ms or 0.001121ms/ray
 
+---
+
 1 thread:
-[INFO] load_scene: Loaded data/max_scene.json in 0.198000ms
-[INFO] load_scene: Creating image of size 3840 x 2160
-[INFO] load_scene: Loaded 30 spheres
-[INFO] load_scene: Loaded 0 planes
-[INFO] load_scene: Loaded 10 triangles
-[INFO] load_scene: Loaded 60 quads
-[INFO] load_scene: Loaded 7 materials
-[INFO] Breaking into 510 tiles
 [INFO] Running over 1 threads
 [INFO] Rendered 486437579 rays in 1227039ms or 0.002523ms/ray
 [INFO] export_image: Successfully written data/max_scene.ppm
+
+------------------------------------------------------------------------------------------------------------------------
+
+BVH iterative ray_colour, Vector Hittables, more minor fixes
+[INFO] load_scene: Loaded scene in 5.267000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 300 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 80 triangles
+[INFO] load_scene: Loaded 100 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 2040 tiles
+[INFO] Running over 7 threads
+[INFO] Rendered 5888144261 rays in 2179878ms or 0.000370ms/ray
+[INFO] export_image: Successfully written data/max_scene.ppm
+
+Time: 2180 sec (36 minutes)
+
+------------------------------------------------------------------------------------------------------------------------
+
+[INFO] Benchmark results for 76931fac-dab2-36c2-8b87-6ae33f9a62d7: Rendered data/benchmark.json in 3538ms, Performance Score: 7.18/10, Thread Count: 8, SIMD type -1.
+[INFO] load_scene: Loaded scene in 1.179000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 300 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 80 triangles
+[INFO] load_scene: Loaded 100 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 2040 tiles
+[INFO] Running over 7 threads
+[INFO] Rendered 5888106386 rays in 2066250ms or 0.000351ms/ray
+[INFO] export_image: Successfully written data/max_scene.ppm
+
+Time: 2066 sec (34 minutes)

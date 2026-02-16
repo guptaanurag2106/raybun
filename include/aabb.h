@@ -64,7 +64,7 @@ static int comparator(const void *a, const void *b) {
 }
 
 // construct bvh and put scene.bvh_root
-static inline Hittable construct_bvh(Hittable *hittable, size_t start,
+static inline Hittable construct_bvh(Arena *a, Hittable *hittable, size_t start,
                                      size_t end) {
     if (hittable == NULL) return (Hittable){0};
     if (start == end) return (Hittable){0};
@@ -74,7 +74,7 @@ static inline Hittable construct_bvh(Hittable *hittable, size_t start,
         return hittable[start];
     }
     if (count == 2) {
-        BVH_Node *node = malloc(sizeof(BVH_Node));
+        BVH_Node *node = ARENA_PUSH_STRUCT(a, BVH_Node);
         node->left = hittable[start];
         node->right = hittable[end - 1];
         return make_hittable_bvh(node,
@@ -86,7 +86,7 @@ static inline Hittable construct_bvh(Hittable *hittable, size_t start,
         box = aabb_join(box, hittable[i].box);
     }
 
-    BVH_Node *node = malloc(sizeof(BVH_Node));
+    BVH_Node *node = ARENA_PUSH_STRUCT(a, BVH_Node);
     if ((box.xmax - box.xmin) > (box.ymax - box.ymin)) {
         if ((box.xmax - box.xmin) > (box.zmax - box.zmin)) {
             g_sort_axis = 0;
@@ -104,8 +104,8 @@ static inline Hittable construct_bvh(Hittable *hittable, size_t start,
     qsort(hittable + start, end - start, sizeof(Hittable), comparator);
 
     size_t mid = count / 2 + start;
-    node->left = construct_bvh(hittable, start, mid);
-    node->right = construct_bvh(hittable, mid, end);
+    node->left = construct_bvh(a, hittable, start, mid);
+    node->right = construct_bvh(a, hittable, mid, end);
 
     return make_hittable_bvh(node, box);
 }
