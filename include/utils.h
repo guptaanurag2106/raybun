@@ -14,7 +14,7 @@
 #include <string.h>
 #include <sys/time.h>
 
-#ifdef _cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -346,8 +346,8 @@ UTILS_DEF char *temp_sprintf(const char *format, ...);
 // ----------------------------------------------------------------------------
 UTILS_DEF char *read_entire_file(const char *filename);
 
-#ifdef _cplusplus
-};
+#ifdef __cplusplus
+}
 #endif
 #endif  // UTILS_H_
 

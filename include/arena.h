@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -38,17 +38,28 @@ ARENA_DEF Arena arena_create(size_t size);
 
 ARENA_DEF void arena_destroy(Arena *a);
 
-ARENA_DEF void arena_reset(Arena *a);
+ARENA_DEF void arena_clear(Arena *a);
 
 ARENA_DEF void *arena_alloc(Arena *a, size_t size);
 
+ARENA_DEF void *arena_alloc_zeroed(Arena *a, size_t size);
+
 ARENA_DEF void *arena_alloc_aligned(Arena *a, size_t size, size_t align);
+
+ARENA_DEF void *arena_alloc_aligned_zeroed(Arena *a, size_t size, size_t align);
 
 #define ARENA_PUSH_STRUCT(arena, type) \
     (type *)arena_alloc_aligned(arena, sizeof(type), _Alignof(type))
 
+#define ARENA_PUSH_STRUCT_ZEROED(arena, type) \
+    (type *)arena_alloc_aligned_zeroed(arena, sizeof(type), _Alignof(type))
+
 #define ARENA_PUSH_ARRAY(arena, type, count) \
     (type *)arena_alloc_aligned(arena, sizeof(type) * (count), _Alignof(type))
+
+#define ARENA_PUSH_ARRAY_ZEROED(arena, type, count)                   \
+    (type *)arena_alloc_aligned_zeroed(arena, sizeof(type) * (count), \
+                                       _Alignof(type))
 
 typedef uint8_t *ArenaCheckpoint;
 
@@ -58,8 +69,8 @@ ARENA_DEF void *arena_get_ptr(Arena *a, ArenaCheckpoint cp);
 
 ARENA_DEF void arena_rewind(Arena *a, ArenaCheckpoint cp);
 
-#ifdef _cplusplus
-};
+#ifdef __cplusplus
+}
 #endif
 #endif  // ARENA_H_
 
@@ -83,13 +94,18 @@ ARENA_DEF void arena_destroy(Arena *a) {
     a->current = NULL;
 }
 
-ARENA_DEF void arena_reset(Arena *a) { a->current = a->buffer + a->capacity; }
+ARENA_DEF void arena_clear(Arena *a) { a->current = a->buffer + a->capacity; }
 
 ARENA_DEF void *arena_alloc(Arena *a, size_t size) {
     size_t available = (size_t)(a->current - a->buffer);
     if (size > available) return NULL;
 
     a->current -= size;
+    return a->current;
+}
+
+ARENA_DEF void *arena_alloc_zeroed(Arena *a, size_t size) {
+    arena_alloc(a, size);
     memset(a->current, 0, size);
     return a->current;
 }
@@ -107,6 +123,12 @@ ARENA_DEF void *arena_alloc_aligned(Arena *a, size_t size, size_t align) {
     if (aligned < (uintptr_t)a->buffer) return NULL;
 
     a->current = (uint8_t *)aligned;
+    return a->current;
+}
+
+ARENA_DEF void *arena_alloc_aligned_zeroed(Arena *a, size_t size,
+                                           size_t align) {
+    arena_alloc_aligned(a, size, align);
     memset(a->current, 0, size);
     return a->current;
 }

@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #include "utils.h"
-#ifdef _cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -162,7 +162,7 @@ VECDEF V3f v3f_refract(const V3f uv, const V3f n, float etai_eta) {
     return v3f_add(r_out_perp, r_out_parallel);
 }
 
-#ifdef _cplusplus
+#ifdef __cplusplus
 }
 #endif
 #endif  // VEC_H_
