@@ -9,6 +9,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "api.h"
 #include "common.h"
 #include "rinternal.h"
 #include "scene.h"
@@ -68,6 +69,7 @@ static Colour ray_colour(Ray *ray, const Scene *scene, int max_depth,
                                TEX_CONSTANT)  // TODO: handle TEX_IMAGE
                                   ? mat->properties.emissive.emission.colour
                                   : (Colour){0, 0, 0};
+            // NOTE: image textures not yet supported for emission
             final_colour =
                 v3f_add(final_colour, v3f_comp_mul(throughput, emission));
         }
@@ -91,6 +93,182 @@ static Colour ray_colour(Ray *ray, const Scene *scene, int max_depth,
     return final_colour;
 }
 
+static void render_single_tile_impl(
+    const Scene *scene, const Tile *tile, const Camera *cam,
+    int samples_per_pixel, int max_depth, const V3f *pixel00_loc,
+    const V3f *pixel_delta_u, const V3f *pixel_delta_v,
+    const V3f *defocus_disk_u, const V3f *defocus_disk_v,
+    float colour_contribution, int image_width, uint32_t *output_buffer) {
+    (void)image_width;
+    long ray_count = 0;
+    rng_seed_tls((uint32_t)time(NULL) ^ (uint32_t)(uintptr_t)pthread_self());
+
+    V3f row_start =
+        v3f_add(*pixel00_loc, v3f_add(v3f_mulf(*pixel_delta_u, tile->x),
+                                      v3f_mulf(*pixel_delta_v, tile->y)));
+
+    for (int j = 0; j < tile->th; j++) {
+        for (int i = 0; i < tile->tw; i++) {
+            Colour colour = (V3f){0, 0, 0};
+
+            V3f pixel_base =
+                v3f_add(row_start, v3f_add(v3f_mulf(*pixel_delta_u, i),
+                                           v3f_mulf(*pixel_delta_v, j)));
+
+            for (int s = 0; s < samples_per_pixel; s++) {
+                V3f pixel_center = v3f_add(
+                    pixel_base,
+                    v3f_add(v3f_mulf(*pixel_delta_u, rng_f32_tls() - 0.5f),
+                            v3f_mulf(*pixel_delta_v, rng_f32_tls() - 0.5f)));
+
+                V3f ray_origin;
+                if (cam->defocus_angle <= 0) {
+                    ray_origin = cam->position;
+                } else {
+                    V3f p = v3f_random_in_unit_disk();
+                    ray_origin = v3f_add(
+                        cam->position, v3f_add(v3f_mulf(*defocus_disk_u, p.x),
+                                               v3f_mulf(*defocus_disk_v, p.y)));
+                }
+                Ray ray = {.origin = ray_origin,
+                           .direction = v3f_sub(pixel_center, cam->position)};
+                ray.length_sq = v3f_slength(ray.direction);
+                ray.length = sqrtf(ray.length_sq);
+                ray.inv_dir = v3f_inv(ray.direction);
+                colour = v3f_add(ray_colour(&ray, scene, max_depth, &ray_count),
+                                 colour);
+            }
+
+            int buffer_idx = j * tile->tw + i;
+            output_buffer[buffer_idx] =
+                pack_colour(v3f_mulf(colour, colour_contribution));
+        }
+    }
+}
+
+// Compute camera-derived vectors used for tiling and tile rendering.
+void compute_render_camera_fields(const Camera *cam, size_t image_width,
+                                  size_t image_height, V3f *pixel00_loc,
+                                  V3f *pixel_delta_u, V3f *pixel_delta_v,
+                                  V3f *defocus_disk_u, V3f *defocus_disk_v) {
+    Camera tmp = *cam;
+    calculate_camera_fields(&tmp);
+
+    V3f vu = v3f_mulf(tmp.right, tmp.viewport_w);
+    V3f vv = v3f_mulf(tmp.up, -tmp.viewport_h);
+
+    *pixel_delta_u = v3f_divf(vu, (float)image_width);
+    *pixel_delta_v = v3f_divf(vv, (float)image_height);
+
+    V3f viewport_top_left =
+        v3f_sub(v3f_add(tmp.position, v3f_mulf(tmp.forward, tmp.focus_dist)),
+                v3f_add(v3f_divf(vu, 2), v3f_divf(vv, 2)));
+
+    *pixel00_loc =
+        v3f_add(viewport_top_left,
+                v3f_mulf(v3f_add(*pixel_delta_u, *pixel_delta_v), 0.5f));
+
+    float defocus_radius = tmp.focus_dist * tanf(tmp.defocus_angle / 2);
+    *defocus_disk_u = v3f_mulf(tmp.right, defocus_radius);
+    *defocus_disk_v = v3f_mulf(tmp.up, defocus_radius);
+}
+
+// Thread func for master, rendering TILE_UNASSIGNED
+static void *render_tile_distributed(void *arg) {
+    struct MasterState *ms = (struct MasterState *)arg;
+    const Scene *scene = ms->scene;
+    Camera cam = scene->camera;
+
+    while (true) {
+        int found = -1;
+
+        int expected = 0;
+        while (!atomic_compare_exchange_strong(&ms->tile_assign_lock, &expected,
+                                               1)) {
+            expected = 0;
+            // spin briefly
+        }
+
+        for (int i = 0; i < ms->tile_count; i++) {
+            if (ms->tiles[i].status == TILE_UNASSIGNED) {
+                found = i;
+                ms->tiles[i].status = TILE_IN_FLIGHT;
+                ms->tiles[i].assigned_worker_idx = -1;  // master
+                break;
+            }
+        }
+
+        atomic_store(&ms->tile_assign_lock, 0);
+
+        if (found == -1) break;
+
+        TileAssignment *assign = &ms->tiles[found];
+
+        uint32_t *tmp =
+            malloc(assign->tile.tw * assign->tile.th * sizeof(uint32_t));
+        if (!tmp) {
+            Log(Log_Error,
+                "render_tile_distributed: malloc failed for tile buffer");
+            assign->status = TILE_UNASSIGNED;
+            continue;
+        }
+
+        render_single_tile_impl(
+            scene, &assign->tile, &cam, ms->samples_per_pixel, ms->max_depth,
+            &ms->pixel00_loc, &ms->pixel_delta_u, &ms->pixel_delta_v,
+            &ms->defocus_disk_u, &ms->defocus_disk_v, ms->colour_contribution,
+            ms->image_width, tmp);
+
+        for (int y = 0; y < assign->tile.th; y++) {
+            int dst_idx =
+                (assign->tile.y + y) * ms->image_width + assign->tile.x;
+            memcpy(&ms->image[dst_idx], &tmp[y * assign->tile.tw],
+                   assign->tile.tw * sizeof(uint32_t));
+        }
+
+        free(tmp);
+
+        assign->status = TILE_COMPLETED;
+    }
+
+    return NULL;
+}
+
+void render_scene_distributed(struct MasterState *master_state,
+                              long thread_count) {
+    struct timeval start, end, diff;
+    gettimeofday(&start, NULL);
+
+    Log(Log_Info, "render_scene_distributed: Starting with %ld threads",
+        thread_count);
+    pthread_t *threads = malloc(thread_count * sizeof(pthread_t));
+    for (long i = 0; i < thread_count; i++) {
+        pthread_create(&threads[i], NULL, render_tile_distributed,
+                       master_state);
+    }
+    for (long i = 0; i < thread_count; i++) pthread_join(threads[i], NULL);
+    free(threads);
+
+    gettimeofday(&end, NULL);
+    timersub(&end, &start, &diff);
+    double ms = (double)diff.tv_sec * 1000 + (double)diff.tv_usec * 1e-3;
+    Log(Log_Info, "render_scene_distributed: Completed in %.0fms", ms);
+}
+
+// Public wrapper that forwards to the internal implementation.
+void render_single_tile(const Scene *scene, const Tile *tile, const Camera *cam,
+                        int samples_per_pixel, int max_depth,
+                        const V3f *pixel00_loc, const V3f *pixel_delta_u,
+                        const V3f *pixel_delta_v, const V3f *defocus_disk_u,
+                        const V3f *defocus_disk_v, float colour_contribution,
+                        int image_width, uint32_t *output_buffer) {
+    render_single_tile_impl(scene, tile, cam, samples_per_pixel, max_depth,
+                            pixel00_loc, pixel_delta_u, pixel_delta_v,
+                            defocus_disk_u, defocus_disk_v, colour_contribution,
+                            image_width, output_buffer);
+}
+
+// TODO: very similar to render_tile_distributed, combine?
 static void *render_tile(void *arg) {
     Work *work = arg;
     const Scene *scene = work->scene;
@@ -164,8 +342,8 @@ void init_work(Scene *scene, State *state, Work *work) {
     V3f vu = v3f_mulf(cam.right, cam.viewport_w);
     V3f vv = v3f_mulf(cam.up, -cam.viewport_h);
 
-    V3f pixel_delta_u = v3f_divf(vu, width);
-    V3f pixel_delta_v = v3f_divf(vv, height);
+    V3f pixel_delta_u = v3f_divf(vu, (float)width);
+    V3f pixel_delta_v = v3f_divf(vv, (float)height);
 
     V3f viewport_top_left =
         v3f_sub(v3f_add(cam.position, v3f_mulf(cam.forward, cam.focus_dist)),
@@ -228,7 +406,8 @@ void render_scene(Work *work, long thread_count) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);
 
-    // TODO: thread pinning
+    // NOTe: thread pinning not needed, as running on thread_count-1?
+    // NOTE: consider thread affinity for reproducible performance
     Log(Log_Info, "Running over %d threads", thread_count);
     pthread_t thread[thread_count];
     for (int i = 0; i < thread_count; i++) {
@@ -247,7 +426,7 @@ void render_scene(Work *work, long thread_count) {
     gettimeofday(&end, NULL);
     timersub(&end, &start, &diff);
 
-    double ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
+    double ms = (double)diff.tv_sec * 1000 + (double)diff.tv_usec * 1e-3;
     double time_per_ray = ms / ray_count;
 
     Log(Log_Info, "Rendered %ld rays in %ldms or %fms/ray", ray_count,

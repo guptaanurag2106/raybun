@@ -46,6 +46,12 @@ typedef struct {
     int mat_index;
 } Quad;
 
+// Tile description used for tiling the image for distributed rendering
+typedef struct {
+    int x, y;    // top-left pixel coordinates in image
+    int tw, th;  // tile width and height
+} Tile;
+
 typedef enum {
     MAT_NONE,  // TODO: MAT_NONE points to default texture?
     MAT_LAMBERTIAN,
@@ -99,8 +105,8 @@ typedef struct {
     V3f origin;
     V3f direction;
     V3f inv_dir;
-    float length_sq; // Squared length of direction
-    float length;    // Length of direction
+    float length_sq;  // Squared length of direction
+    float length;     // Length of direction
 } Ray;
 
 typedef struct {
@@ -133,3 +139,15 @@ typedef struct BVH_Node {
     Hittable left;
     Hittable right;
 } BVH_Node;
+
+typedef enum {
+    TILE_UNASSIGNED = 0,
+    TILE_IN_FLIGHT = 1,
+    TILE_COMPLETED = 2,
+} TileStatus;
+
+typedef struct {
+    Tile tile;
+    TileStatus status;
+    int assigned_worker_idx;  // -1 = master, >=0 = index into workers vector
+} TileAssignment;

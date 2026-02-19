@@ -402,7 +402,6 @@ char *read_compress_scene(const char *scene_file) {
     return file;
 }
 
-// TODO: switch to arena allocator
 void load_scene(const char *scene_file_content, Scene *scene, State *state) {
     struct timeval start, end, diff;
     gettimeofday(&start, NULL);

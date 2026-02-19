@@ -17,6 +17,7 @@ static bool lambertian_scatter(const Material *mat, const HitRecord *rec,
         scatter_dir = rec->normal;
     }
     *ray_out = (Ray){rec->point, scatter_dir, v3f_inv(scatter_dir)};
+    // FIXME: Ray.length_sq not explicitly initialized here
     if (mat->properties.lambertian.albedo.type ==
         TEX_CONSTANT)  // TODO: add TEX_IMAGE
         *attenuation = mat->properties.lambertian.albedo.colour;
@@ -33,6 +34,7 @@ static bool metal_scatter(const Material *mat, const HitRecord *rec,
         v3f_add(v3f_normalize(reflected_dir),
                 v3f_mulf(v3f_random_unit(), mat->properties.metal.fuzz));
     *ray_out = (Ray){rec->point, reflected_dir, v3f_inv(reflected_dir)};
+    // FIXME: Ray.length_sq not explicitly initialized here
     if (mat->properties.metal.albedo.type ==
         TEX_CONSTANT)  // TODO: add TEX_IMAGE
         *attenuation = mat->properties.metal.albedo.colour;
@@ -66,11 +68,12 @@ static bool dielectric_scatter(const Material *mat, const HitRecord *rec,
         direction = v3f_reflect(norm_direction, rec->normal);
     }
     *ray_out = (Ray){rec->point, direction, v3f_inv(direction)};
+    // FIXME: Ray.length_sq not explicitly initialized here
     return true;
 }
 
-bool scatter(const Material *mat, const HitRecord *rec,
-                    const Ray *ray_in, Colour *attenuation, Ray *ray_out) {
+bool scatter(const Material *mat, const HitRecord *rec, const Ray *ray_in,
+             Colour *attenuation, Ray *ray_out) {
     if (mat->type == MAT_LAMBERTIAN)
         return lambertian_scatter(mat, rec, ray_in, attenuation, ray_out);
     if (mat->type == MAT_METAL)

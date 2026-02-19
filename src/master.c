@@ -11,13 +11,14 @@
 #include "libmicrohttpd-1.0.1/src/include/microhttpd.h"
 #include "utils.h"
 
-static int send_response(struct MHD_Connection *connection, unsigned int status,
-                         const char *msg) {
+static enum MHD_Result send_response(struct MHD_Connection *connection,
+                                     unsigned int status, const char *msg) {
     struct MHD_Response *resp = MHD_create_response_from_buffer(
         strlen(msg), (void *)msg, MHD_RESPMEM_MUST_COPY);
     MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE,
                             "application/json");
-    int ret = MHD_queue_response(connection, status, resp);
+    // NOTE: handlers currently return JSON only; change header if needed
+    enum MHD_Result ret = MHD_queue_response(connection, status, resp);
     MHD_destroy_response(resp);
     return ret;
 }
@@ -59,7 +60,7 @@ static enum MHD_Result answer_get_request(
             char *json = cJSON_PrintUnformatted(root);
             cJSON_Delete(root);
 
-            int ret = send_response(connection, MHD_HTTP_OK, json);
+            enum MHD_Result ret = send_response(connection, MHD_HTTP_OK, json);
             free(json);
             return ret;
         }
@@ -90,11 +91,70 @@ static enum MHD_Result answer_get_request(
                                      notfound);
             }
 
-            // TODO: dont add until done? have separate variable/array of done,
-            // in-flight
-            // TODO: check perf if we want to give anything to this worker
-            int curr_tile = atomic_fetch_add(&context->work->tile_finished, 1);
-            if (curr_tile >= context->work->tile_count) {
+            // Prefer using the MasterState tile assignments when available so
+            // master threads and the HTTP handlers coordinate through the
+            // same data structure.
+            struct MasterState *ms = context->master_state;
+            if (!ms) {
+                // Fallback to legacy behaviour
+                int curr_tile =
+                    atomic_fetch_add(&context->work->tile_finished, 1);
+                if (curr_tile >= context->work->tile_count) {
+                    Log(Log_Info,
+                        "Master: Worker '%s' requested work but no tiles left",
+                        worker_id);
+                    const char *done =
+                        "{\"status\":\"/api/work all work done, no tiles "
+                        "left\"}";
+                    return send_response(connection, MHD_HTTP_OK, done);
+                }
+                Tile tile = context->work->tiles[curr_tile];
+                Log(Log_Debug, "Master: Assigned tile %d (%d,%d %dx%d) to '%s'",
+                    curr_tile, tile.x, tile.y, tile.tw, tile.th, worker_id);
+
+                cJSON *root = cJSON_CreateObject();
+                cJSON_AddNumberToObject(root, "tile_id", curr_tile);
+                cJSON *tilej = cJSON_CreateObject();
+                cJSON_AddNumberToObject(tilej, "x", tile.x);
+                cJSON_AddNumberToObject(tilej, "y", tile.y);
+                cJSON_AddNumberToObject(tilej, "tw", tile.tw);
+                cJSON_AddNumberToObject(tilej, "th", tile.th);
+                cJSON_AddItemToObject(root, "tile", tilej);
+                char *json = cJSON_PrintUnformatted(root);
+                cJSON_Delete(root);
+
+                enum MHD_Result ret =
+                    send_response(connection, MHD_HTTP_OK, json);
+                free(json);
+                return ret;
+            }
+
+            // find first TILE_UNASSIGNED
+            int found = -1;
+            int expected = 0;
+            while (!atomic_compare_exchange_strong(&ms->tile_assign_lock,
+                                                   &expected, 1)) {
+                expected = 0;
+            }
+            for (int i = 0; i < ms->tile_count; i++) {
+                if (ms->tiles[i].status == TILE_UNASSIGNED) {
+                    found = i;
+                    int worker_idx = -2;
+                    for (size_t wi = 0; wi < ms->workers.size; wi++) {
+                        if (strcmp(ms->workers.items[wi].name, worker_id) ==
+                            0) {
+                            worker_idx = (int)wi;
+                            break;
+                        }
+                    }
+                    ms->tiles[i].status = TILE_IN_FLIGHT;
+                    ms->tiles[i].assigned_worker_idx = worker_idx;
+                    break;
+                }
+            }
+            atomic_store(&ms->tile_assign_lock, 0);
+
+            if (found == -1) {
                 Log(Log_Info,
                     "Master: Worker '%s' requested work but no tiles left",
                     worker_id);
@@ -103,12 +163,21 @@ static enum MHD_Result answer_get_request(
                 return send_response(connection, MHD_HTTP_OK, done);
             }
 
-            Tile tile = context->work->tiles[curr_tile];
-            Log(Log_Debug, "Master: Assigned tile %d (%d,%d %dx%d) to '%s'",
-                curr_tile, tile.x, tile.y, tile.tw, tile.th, worker_id);
+            Tile tile = ms->tiles[found].tile;
+            int assigned_idx = ms->tiles[found].assigned_worker_idx;
+            if (assigned_idx >= 0) {
+                Log(Log_Info,
+                    "Master: Assigned tile %d (%d,%d %dx%d) to '%s' (idx %d)",
+                    found, tile.x, tile.y, tile.tw, tile.th, worker_id,
+                    assigned_idx);
+            } else {
+                Log(Log_Info,
+                    "Master: Assigned tile %d (%d,%d %dx%d) to '%s' (external)",
+                    found, tile.x, tile.y, tile.tw, tile.th, worker_id);
+            }
 
             cJSON *root = cJSON_CreateObject();
-            cJSON_AddNumberToObject(root, "tile_id", curr_tile);
+            cJSON_AddNumberToObject(root, "tile_id", found);
             cJSON *tilej = cJSON_CreateObject();
             cJSON_AddNumberToObject(tilej, "x", tile.x);
             cJSON_AddNumberToObject(tilej, "y", tile.y);
@@ -118,7 +187,7 @@ static enum MHD_Result answer_get_request(
             char *json = cJSON_PrintUnformatted(root);
             cJSON_Delete(root);
 
-            int ret = send_response(connection, MHD_HTTP_OK, json);
+            enum MHD_Result ret = send_response(connection, MHD_HTTP_OK, json);
             free(json);
             return ret;
         }
@@ -253,6 +322,12 @@ static enum MHD_Result answer_get_request(
                 info.name, info.perf);
 
             vec_push(&context->workers, info);
+            if (context->master_state) {
+                vec_push(&context->master_state->workers, info);
+                Log(Log_Info,
+                    "Master: Worker '%s' mapped to index %zu in MasterState",
+                    info.name, context->master_state->workers.size - 1);
+            }
 
             cJSON_Delete(root);
             return send_response(connection, MHD_HTTP_OK, "{\"success\":true}");
@@ -288,7 +363,30 @@ static enum MHD_Result answer_get_request(
                                      "{\"error\":\"Invalid tile_id\"}");
             }
 
-            Tile tile = context->work->tiles[tid];
+            struct MasterState *ms = context->master_state;
+            Tile tile;
+            int worker_idx = -1;
+            if (ms) {
+                for (size_t wi = 0; wi < ms->workers.size; wi++) {
+                    if (strcmp(ms->workers.items[wi].name, worker_name) == 0) {
+                        worker_idx = (int)wi;
+                        break;
+                    }
+                }
+            }
+            if (ms) {
+                if (tid < 0 || tid >= ms->tile_count) {
+                    cJSON_Delete(root);
+                    Log(Log_Warn, "Master: Worker sent invalid tile_id %d",
+                        tid);
+                    return send_response(connection, MHD_HTTP_BAD_REQUEST,
+                                         "{\"error\":\"Invalid tile_id\"}");
+                }
+                tile = ms->tiles[tid].tile;
+            } else {
+                tile = context->work->tiles[tid];
+            }
+
             const char *hex_pixels = pixels->valuestring;
             int expected_len =
                 tile.tw * tile.th * 8;  // 8 hex chars per pixel (ARGB)
@@ -307,23 +405,52 @@ static enum MHD_Result answer_get_request(
             for (int y = 0; y < tile.th; y++) {
                 for (int x = 0; x < tile.tw; x++) {
                     char hex[9];
-                    // FIX:better method
+                    // FIX: better method (use binary POST or parse directly)
                     memcpy(hex, hex_pixels, 8);
                     hex[8] = '\0';
                     uint32_t pixel = (uint32_t)strtoul(hex, NULL, 16);
 
-                    int image_idx =
-                        (tile.y + y) * context->state->width + (tile.x + x);
-                    context->state->image[image_idx] = pixel;
+                    int image_idx;
+                    if (ms) {
+                        image_idx =
+                            (tile.y + y) * ms->image_width + (tile.x + x);
+                        ms->image[image_idx] = pixel;
+                    } else {
+                        image_idx =
+                            (tile.y + y) * context->state->width + (tile.x + x);
+                        context->state->image[image_idx] = pixel;
+                    }
 
                     hex_pixels += 8;
                 }
             }
 
-            // TODO:mark the tile done (separate array?)
+            // Mark tile as completed in MasterState if present and log mapping
+            if (ms) {
+                int expected = 0;
+                while (!atomic_compare_exchange_strong(&ms->tile_assign_lock,
+                                                       &expected, 1)) {
+                    expected = 0;
+                }
+                int assigned = ms->tiles[tid].assigned_worker_idx;
+                ms->tiles[tid].status = TILE_COMPLETED;
+                atomic_store(&ms->tile_assign_lock, 0);
 
-            Log(Log_Debug, "Master: Received result for tile %d from '%s'", tid,
-                worker_name);
+                if (worker_idx >= 0) {
+                    Log(Log_Info,
+                        "Master: Received result for tile %d from '%s' (idx "
+                        "%d), assigned idx was %d",
+                        tid, worker_name, worker_idx, assigned);
+                } else {
+                    Log(Log_Info,
+                        "Master: Received result for tile %d from '%s' "
+                        "(external), assigned idx was %d",
+                        tid, worker_name, assigned);
+                }
+            } else {
+                Log(Log_Debug, "Master: Received result for tile %d from '%s'",
+                    tid, worker_name);
+            }
 
             cJSON_Delete(root);
             return send_response(connection, MHD_HTTP_OK, "{\"success\":true}");

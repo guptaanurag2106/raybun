@@ -1,3 +1,4 @@
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,7 +73,7 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
     timersub(&end, &start, &diff);
 
     float perf_score = -1;
-    float ms = diff.tv_sec * 1000 + diff.tv_usec * 1e-3;
+    float ms = (float)diff.tv_sec * 1000.0f + (float)diff.tv_usec * 0.001f;
     float tmin = 1000;
     float tmax = 10000;
     if (ms >= tmax)
@@ -97,8 +98,7 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
 
     Log(Log_Info,
         "Benchmark results for %s: Rendered %s in %.0fms, "
-        "Performance Score: "
-        "%.2f/10, Thread Count: %d, SIMD type %d.",
+        "Performance Score: %.2f/10, Thread Count: %d, SIMD type %d.",
         name, perf_json_file, ms, perf_score, thread_count, simd);
     return stats;
 }
@@ -214,8 +214,39 @@ int main(int argc, char **argv) {
 
         init_work(context->scene, context->state, context->work);
 
-        // TODO: better error handling, check async
-        // Start server before rendering so we can check status/connect
+        // Create MasterState and wire it into API context so the server and
+        // master threads coordinate over the same tile assignments.
+        struct MasterState *ms = malloc(sizeof(struct MasterState));
+        if (!ms) {
+            Log(Log_Error, "main: Failed to allocate MasterState");
+            return 1;
+        }
+        ms->scene = context->scene;
+        ms->state = context->state;
+        ms->tile_count = context->work->tile_count;
+        ms->tiles = malloc(sizeof(TileAssignment) * ms->tile_count);
+        for (int i = 0; i < ms->tile_count; i++) {
+            ms->tiles[i].tile = context->work->tiles[i];
+            ms->tiles[i].status = TILE_UNASSIGNED;
+            ms->tiles[i].assigned_worker_idx = -3; /* unassigned */
+        }
+        vec_init(&ms->workers);
+        ms->samples_per_pixel = state->samples_per_pixel;
+        ms->max_depth = state->max_depth;
+        ms->colour_contribution = 1.0f / (float)state->samples_per_pixel;
+
+        // compute camera-derived vectors for tile rendering
+        compute_render_camera_fields(&scene->camera, state->width,
+                                     state->height, &ms->pixel00_loc,
+                                     &ms->pixel_delta_u, &ms->pixel_delta_v,
+                                     &ms->defocus_disk_u, &ms->defocus_disk_v);
+        ms->image = state->image;
+        ms->image_width = state->width;
+        atomic_init(&ms->tile_assign_lock, 0);
+
+        context->master_state = ms;
+
+        // Start server before rendering so workers can connect.
         if (mode == 0) {
             bool success = master_start_server(port, context);
             if (success) {
@@ -224,16 +255,52 @@ int main(int argc, char **argv) {
                 Log(Log_Error,
                     "master_start_server: Cannot start master server");
             }
-        }
 
-        // master will run on N-1 threads
-        long thread_count = stats.thread_count - 1;
-        render_scene(context->work, thread_count);
-        vec_free(&context->workers);
+            // Start master-side renderer threads to process tiles locally while
+            // accepting remote workers. The HTTP server is already running in
+            // background threads, so calling `render_scene_distributed` will
+            // let master threads claim tiles concurrently with workers.
+            long thread_count = stats.thread_count - 1;
+            render_scene_distributed(ms, thread_count);
+
+            // After master-side rendering completes, wait for any remaining
+            // tiles to be uploaded by workers.
+            int total = ms->tile_count;
+            Log(Log_Info,
+                "Master: master-side rendering done; waiting for %d tiles "
+                "total",
+                total);
+            int last_logged = -1;
+            // TODO: infinite wait for dead workers? switch to amster rendering
+            while (true) {  // Spin until workers complete
+                int completed = 0;
+                for (int i = 0; i < ms->tile_count; i++) {
+                    if (ms->tiles[i].status == TILE_COMPLETED) completed++;
+                }
+                if (completed >= total) break;
+                if (completed != last_logged && completed % 4 == 0) {
+                    Log(Log_Info, "Master: progress %d/%d tiles completed",
+                        completed, total);
+                    last_logged = completed;
+                }
+                sleep(1);
+            }
+
+            Log(Log_Info, "Master: all tiles completed (master+workers)");
+            free(ms->tiles);
+            vec_free(&ms->workers);
+            free(ms);
+            vec_free(&context->workers);
+        } else {
+            // standalone mode: render locally using existing work struct
+            long thread_count = stats.thread_count - 1;
+            render_scene(context->work, thread_count);
+            vec_free(&context->workers);
+        }
     }
 
     if (mode == 1) {
-        bool success = worker_connect("", 1);
+        bool success = worker_connect(master_url, 0, stats);
         if (success) {
             Log(Log_Info, "worker_connect: Connected to master");
         } else {
@@ -241,7 +308,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    // export image for master, and standalone modes
     if (mode == 0 || mode == 2) {
         if (output_name == NULL) {
             output_name = strdup(scene_json_file);
@@ -260,7 +326,6 @@ int main(int argc, char **argv) {
     }
 
     Log(Log_Info, "Press Enter to exit...");
-    // getchar();
     if (master_daemon) {
         MHD_stop_daemon(master_daemon);
     }

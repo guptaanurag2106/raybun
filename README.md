@@ -64,3 +64,87 @@ make
 ./build/raybun worker http://localhost:3000 worker1_name
 
 ```
+
+## Example showing work sharing
+
+`./build/raybun master 3000 data/simple_scene.json 
+    & sleep 0.5 && ./build/raybun worker http://localhost:3000 worker1`
+Output: 
+```bash
+[raybun] 461245
+[INFO] Benchmark results for 76931fac-dab2-36c2-8b87-6ae33f9a62d7: Rendered data/benchmark.json in 3419ms, Performance Score: 7.31/10, Thread Count: 8, SIMD type -1.
+[INFO] load_scene: Loaded data/suzanne/model.obj with 511 vertices and 0 triangles
+[INFO] load_scene: Loaded scene in 1.705000ms
+[INFO] load_scene: Creating image of size 720 x 720
+[INFO] load_scene: Loaded 0 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 0 triangles
+[INFO] load_scene: Loaded 6 quads
+[INFO] load_scene: Loaded 10 materials
+[INFO] Breaking into 144 tiles
+[INFO] Master: Starting server on port 3000
+[INFO] master_start_server: Started master server
+[INFO] render_scene_distributed: Starting with 7 threads
+[INFO] Benchmark results for worker1: Rendered data/benchmark.json in 4325ms, Performance Score: 6.31/10, Thread Count: 8, SIMD type -1.
+[INFO] Worker: Connecting to Master at http://localhost:3000:0
+[INFO] Master: Serving scene 234845181 to worker
+[INFO] Master: Registering worker 'worker1' (Perf: 6.31)
+[INFO] Master: Worker 'worker1' mapped to index 0 in MasterState
+[INFO] Master: Assigned tile 40 (256,192 64x64) to 'worker1' (idx 0)
+[INFO] load_scene: Loaded data/suzanne/model.obj with 511 vertices and 0 triangles
+[INFO] load_scene: Loaded scene in 1.606000ms
+[INFO] Worker: Registered with master
+[INFO] Master: Received result for tile 40 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 45 (576,192 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 45 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 51 (192,256 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 51 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 56 (512,256 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 56 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 65 (320,320 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 65 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 69 (576,320 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 69 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 76 (256,384 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 76 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 79 (448,384 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 79 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 88 (256,448 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 88 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 93 (576,448 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 93 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 96 (0,512 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 96 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 102 (384,512 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 102 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 111 (192,576 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 111 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 118 (640,576 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 118 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 122 (128,640 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 122 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 127 (448,640 64x64) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 127 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 133 (64,704 64x16) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 133 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 134 (128,704 64x16) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 134 from 'worker' (external), assigned idx was 0
+[INFO] Master: Assigned tile 139 (448,704 64x16) to 'worker1' (idx 0)
+[INFO] Master: Received result for tile 139 from 'worker' (external), assigned idx was 0
+[INFO] Master: Worker 'worker1' requested work but no tiles left
+[INFO] render_scene_distributed: Completed in 4386ms
+[INFO] Master: master-side rendering done; waiting for 144 tiles total
+[INFO] Master: all tiles completed (master+workers)
+[INFO] worker_connect: Connected to master
+[INFO] Press Enter to exit...
+[INFO] export_image: Successfully written data/simple_scene.png
+[INFO] Press Enter to exit...
+```
+
+## TODO
+- Share work based on perf score
+- reassign tile(s) to other worker if original worker timed-out
+- reassign tile(s) if all workers timed-out
+- reassign tile(s) if faster worker registered?
+- Switch to binary image transfer?
+- SIMD?
