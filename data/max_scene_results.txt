@@ -113,3 +113,60 @@ Time: 2180 sec (36 minutes)
 [INFO] export_image: Successfully written data/max_scene.ppm
 
 Time: 2066 sec (34 minutes)
+
+------------------------------------------------------------------------------------------------------------------------
+
+Add master/worker stuff
+[INFO] Benchmark results for 76931fac-dab2-36c2-8b87-6ae33f9a62d7: Rendered data/benchmark.json in 3100ms, Performance Score: 7.67/10, Thread Count: 8, SIMD type -1.
+[INFO] load_scene: Loaded scene in 1.170000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 300 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 80 triangles
+[INFO] load_scene: Loaded 100 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 2040 tiles
+[INFO] Running over 7 threads
+[INFO] Rendered 5888086411 rays in 1697599ms or 0.000288ms/ray
+[INFO] export_image: Successfully written data/max_scene.ppm
+[INFO] Press Enter to exit...
+
+Time: 1698 sec (28 minutes)
+
+------------------------------------------------------------------------------------------------------------------------
+
+Trying out unity build
+[INFO] Benchmark results for 76931fac-dab2-36c2-8b87-6ae33f9a62d7: Rendered data/benchmark.json in 3002ms, Performance Score: 7.78/10, Thread Count: 8, SIMD type -1.
+[INFO] load_scene: Loaded scene in 2.826000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 300 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 80 triangles
+[INFO] load_scene: Loaded 100 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 2040 tiles
+[INFO] Running over 7 threads
+[INFO] Rendered 5888043528 rays in 1696155ms or 0.000288ms/ray
+[INFO] export_image: Successfully written data/max_scene.ppm
+[INFO] Press Enter to exit...
+
+Time: 1696 sec (28 minutes), so same as non unity builds (-fLto??)
+
+------------------------------------------------------------------------------------------------------------------------
+
+No -flto, gcsections
+[INFO] Benchmark results for 76931fac-dab2-36c2-8b87-6ae33f9a62d7: Rendered data/benchmark.json in 3055ms, Performance Score: 7.72/10, Thread Count: 8, SIMD type -1.
+[INFO] load_scene: Loaded scene in 1.188000ms
+[INFO] load_scene: Creating image of size 3840 x 2160
+[INFO] load_scene: Loaded 300 spheres
+[INFO] load_scene: Loaded 0 planes
+[INFO] load_scene: Loaded 80 triangles
+[INFO] load_scene: Loaded 100 quads
+[INFO] load_scene: Loaded 7 materials
+[INFO] Breaking into 2040 tiles
+[INFO] Running over 7 threads
+b[INFO] Rendered 5888175089 rays in 1851192ms or 0.000314ms/ray
+[INFO] export_image: Successfully written data/max_scene.ppm
+[INFO] Press Enter to exit...
+
+Time: 1851 sec (30.9 minutes) slighly worse

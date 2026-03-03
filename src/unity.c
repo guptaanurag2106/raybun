@@ -1,0 +1,9 @@
+#include "imagerw.c"
+#include "main.c"
+#undef UTILS_IMPLEMENTATION
+#include "master.c"
+#include "material.c"
+#include "renderer.c"
+#include "rinternal.c"
+#include "scene_loader.c"
+#include "worker.c"

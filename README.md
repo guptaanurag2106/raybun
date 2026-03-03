@@ -141,10 +141,16 @@ Output:
 [INFO] Press Enter to exit...
 ```
 
+## Benchmarks
+Refer @data/max_scene_results.txt for performance
+
 ## TODO
+- Get obj, mtl working, texture materials
+- Multithreaded worker
 - Share work based on perf score
+- A lot of repetition render_tile/render_tile_distributed, repeated camera calcs
+- Switch to binary image transfer?
 - reassign tile(s) to other worker if original worker timed-out
 - reassign tile(s) if all workers timed-out
 - reassign tile(s) if faster worker registered?
-- Switch to binary image transfer?
 - SIMD?
