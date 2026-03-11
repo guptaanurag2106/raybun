@@ -7,7 +7,7 @@ THIRD_PARTY = thirdparty
 
 RAYBUN = $(BUILD_DIR)/raybun
 
-SRC = $(shell find $(SRC_DIR) -type f -name "*.c")
+SRC = $(shell find $(SRC_DIR) -type f -name "*.c" ! -name "unity.c")
 OBJ = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRC))
 
 CJSON_DIR   = $(THIRD_PARTY)/cJSON-1.7.19

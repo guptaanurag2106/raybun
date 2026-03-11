@@ -236,7 +236,7 @@ static void *render_tile_distributed(void *arg) {
 
 void render_scene_distributed(struct MasterState *master_state,
                               long thread_count) {
-    struct timeval start, end, diff;
+    struct timeval start, end;
     gettimeofday(&start, NULL);
 
     Log(Log_Info, "render_scene_distributed: Starting with %ld threads",
@@ -250,8 +250,7 @@ void render_scene_distributed(struct MasterState *master_state,
     free(threads);
 
     gettimeofday(&end, NULL);
-    timersub(&end, &start, &diff);
-    double ms = (double)diff.tv_sec * 1000 + (double)diff.tv_usec * 1e-3;
+    double ms = timersub_ms(&end, &start);
     Log(Log_Info, "render_scene_distributed: Completed in %.0fms", ms);
 }
 
@@ -403,7 +402,7 @@ void init_work(Scene *scene, State *state, Work *work) {
 }
 
 void render_scene(Work *work, long thread_count) {
-    struct timeval start, end, diff;
+    struct timeval start, end;
     gettimeofday(&start, NULL);
 
     // NOTe: thread pinning not needed, as running on thread_count-1?
@@ -424,9 +423,7 @@ void render_scene(Work *work, long thread_count) {
 
     long ray_count = work->ray_count;
     gettimeofday(&end, NULL);
-    timersub(&end, &start, &diff);
-
-    double ms = (double)diff.tv_sec * 1000 + (double)diff.tv_usec * 1e-3;
+    double ms = timersub_ms(&end, &start);
     double time_per_ray = ms / ray_count;
 
     Log(Log_Info, "Rendered %ld rays in %ldms or %fms/ray", ray_count,

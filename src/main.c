@@ -62,7 +62,7 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
 
     Work *work = malloc(sizeof(Work));
 
-    struct timeval start, end, diff;
+    struct timeval start, end;
     gettimeofday(&start, NULL);
 
     calculate_camera_fields(&scene->camera);
@@ -70,10 +70,9 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
     render_scene(work, 1);  // get single threaded performance
 
     gettimeofday(&end, NULL);
-    timersub(&end, &start, &diff);
 
     float perf_score = -1;
-    float ms = (float)diff.tv_sec * 1000.0f + (float)diff.tv_usec * 0.001f;
+    float ms = (float)timersub_ms(&end, &start);
     float tmin = 1000;
     float tmax = 10000;
     if (ms >= tmax)

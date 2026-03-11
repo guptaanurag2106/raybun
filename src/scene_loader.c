@@ -403,7 +403,7 @@ char *read_compress_scene(const char *scene_file) {
 }
 
 void load_scene(const char *scene_file_content, Scene *scene, State *state) {
-    struct timeval start, end, diff;
+    struct timeval start, end;
     gettimeofday(&start, NULL);
 
     scene->objects = (Hittables){0};
@@ -677,8 +677,7 @@ END_PARSE:
 
     scene->camera = camera;
     gettimeofday(&end, NULL);
-    timersub(&end, &start, &diff);
-    float ms = diff.tv_sec * 100 + diff.tv_usec * 1e-3;
+    float ms = (float)timersub_ms(&end, &start);
 
     Log(Log_Info, "load_scene: Loaded scene in %fms", ms);
 }

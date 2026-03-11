@@ -121,16 +121,14 @@ static inline char *shift(int *argc, char ***argv) {
     return *((*argv)++);
 }
 
-UTILS_DEF char *generate_uuid();
+UTILS_DEF char *generate_uuid(void);
 
-static inline void timersub(const struct timeval *a, const struct timeval *b,
-                            struct timeval *result) {
-    result->tv_sec = a->tv_sec - b->tv_sec;
-    result->tv_usec = a->tv_usec - b->tv_usec;
-    if (result->tv_usec < 0) {
-        result->tv_sec--;
-        result->tv_usec += 1000000;
-    }
+static inline double timersub_ms(const struct timeval *end,
+                                 const struct timeval *start) {
+    double res = 0.0;
+    res += (end->tv_sec - start->tv_sec) * 1000.0;
+    res += (end->tv_usec - start->tv_usec) * 0.001;
+    return res;
 }
 
 // ----------------------------------------------------------------------------
