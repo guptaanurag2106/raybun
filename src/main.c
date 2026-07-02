@@ -71,16 +71,16 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
 
     gettimeofday(&end, NULL);
 
-    float perf_score = -1;
-    float ms = (float)timersub_ms(&end, &start);
-    float tmin = 1000;
-    float tmax = 10000;
+    double perf_score = -1;
+    double ms = timersub_ms(&end, &start);
+    double tmin = 1000;
+    double tmax = 10000;
     if (ms >= tmax)
         perf_score = 0;
     else if (ms <= tmin)
         perf_score = 10;
     else
-        perf_score = 10.0f * (1.0f - (ms - tmin) / (tmax - tmin));
+        perf_score = 10.0 * (1.0 - (ms - tmin) / (tmax - tmin));
 
     free_scene(scene);
     Log_set_level(level);
@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
         state = malloc(sizeof(State));
 
         scene_json = read_compress_scene(scene_json_file);
-        unsigned int scene_crc =
+        int scene_crc =
             stbiw__crc32((unsigned char *)scene_json, strlen(scene_json));
 
         load_scene(scene_json, scene, state);
@@ -259,7 +259,7 @@ int main(int argc, char **argv) {
             // accepting remote workers. The HTTP server is already running in
             // background threads, so calling `render_scene_distributed` will
             // let master threads claim tiles concurrently with workers.
-            long thread_count = stats.thread_count - 1;
+            size_t thread_count = stats.thread_count - 1;
             render_scene_distributed(ms, thread_count);
 
             // After master-side rendering completes, wait for any remaining

@@ -126,8 +126,8 @@ UTILS_DEF char *generate_uuid(void);
 static inline double timersub_ms(const struct timeval *end,
                                  const struct timeval *start) {
     double res = 0.0;
-    res += (end->tv_sec - start->tv_sec) * 1000.0;
-    res += (end->tv_usec - start->tv_usec) * 0.001;
+    res += (double)(end->tv_sec - start->tv_sec) * 1000.0;
+    res += (double)(end->tv_usec - start->tv_usec) * 0.001;
     return res;
 }
 
@@ -143,18 +143,18 @@ static inline double timersub_ms(const struct timeval *end,
 #define DEG2RAD(_d) ((_d) * (PI / 180.0f))
 #define RAD2DEG(_r) ((_r) * (180.0f / PI))
 
-#define CEILF(x)                                  \
-    ({                                            \
-        float _x = (x);                           \
-        int _i = (int)_x;                         \
-        (_i == _x) ? _i : (_x > 0 ? _i + 1 : _i); \
+#define CEILF(x)                                         \
+    ({                                                   \
+        float _x = (x);                                  \
+        int _i = (int)_x;                                \
+        ((float)_i == _x) ? _i : (_x > 0 ? _i + 1 : _i); \
     })
 
-#define FLOATF(x)                                 \
-    ({                                            \
-        float _x = (x);                           \
-        int _i = (int)_x;                         \
-        (_i == _x) ? _i : (_x > 0 ? _i : _i - 1); \
+#define FLOATF(x)                                        \
+    ({                                                   \
+        float _x = (x);                                  \
+        int _i = (int)_x;                                \
+        ((float)_i == _x) ? _i : (_x > 0 ? _i : _i - 1); \
     })
 
 static inline float lerp_float(float start, float end, float t) {

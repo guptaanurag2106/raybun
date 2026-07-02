@@ -112,7 +112,7 @@ bool worker_connect(const char *master_ip, int port, MachineInfo stats) {
     load_scene(scene_json->valuestring, scene, state);
     scene->scene_json = strdup(scene_json->valuestring);
     if (cJSON_IsNumber(scene_crc_j)) {
-        scene->scene_crc = (unsigned int)scene_crc_j->valueint;
+        scene->scene_crc = scene_crc_j->valueint;
     }
 
     cJSON_Delete(root);
@@ -124,7 +124,7 @@ bool worker_connect(const char *master_ip, int port, MachineInfo stats) {
     cJSON *reg = cJSON_CreateObject();
     cJSON_AddStringToObject(reg, "name", stats.name);
     cJSON_AddNumberToObject(reg, "perf", stats.perf);
-    cJSON_AddNumberToObject(reg, "thread_count", stats.thread_count);
+    cJSON_AddNumberToObject(reg, "thread_count", (double)stats.thread_count);
     cJSON_AddNumberToObject(reg, "simd", stats.simd);
     char *reg_body = cJSON_PrintUnformatted(reg);
     cJSON_Delete(reg);
@@ -189,14 +189,15 @@ bool worker_connect(const char *master_ip, int port, MachineInfo stats) {
         render_single_tile(scene, &tile, &cam, state->samples_per_pixel,
                            state->max_depth, &pixel00_loc, &pixel_delta_u,
                            &pixel_delta_v, &defocus_disk_u, &defocus_disk_v,
-                           1.0f / state->samples_per_pixel, state->width, buf);
+                           1.0f / (float)state->samples_per_pixel, state->width,
+                           buf);
 
         // build hex payload (inefficient - consider binary POST)
-        int pixel_count = tile.tw * tile.th;
-        int hex_len = pixel_count * 8;
+        size_t pixel_count = tile.tw * tile.th;
+        size_t hex_len = pixel_count * 8;
         char *hex = malloc(hex_len + 1);
         char *hp = hex;
-        for (int i = 0; i < pixel_count; i++) {
+        for (size_t i = 0; i < pixel_count; i++) {
             sprintf(hp, "%08x", buf[i]);
             hp += 8;
         }

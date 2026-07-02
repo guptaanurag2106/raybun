@@ -16,7 +16,8 @@ static bool lambertian_scatter(const Material *mat, const HitRecord *rec,
     if (v3f_near_zero(scatter_dir)) {
         scatter_dir = rec->normal;
     }
-    *ray_out = (Ray){rec->point, scatter_dir, v3f_inv(scatter_dir)};
+    *ray_out =
+        (Ray){rec->point, scatter_dir, v3f_inv(scatter_dir), .length_sq = 0.0f};
     // FIXME: Ray.length_sq not explicitly initialized here
     if (mat->properties.lambertian.albedo.type ==
         TEX_CONSTANT)  // TODO: add TEX_IMAGE
@@ -33,7 +34,8 @@ static bool metal_scatter(const Material *mat, const HitRecord *rec,
     reflected_dir =
         v3f_add(v3f_normalize(reflected_dir),
                 v3f_mulf(v3f_random_unit(), mat->properties.metal.fuzz));
-    *ray_out = (Ray){rec->point, reflected_dir, v3f_inv(reflected_dir)};
+    *ray_out = (Ray){rec->point, reflected_dir, v3f_inv(reflected_dir),
+                     .length_sq = 0.0f};
     // FIXME: Ray.length_sq not explicitly initialized here
     if (mat->properties.metal.albedo.type ==
         TEX_CONSTANT)  // TODO: add TEX_IMAGE
@@ -67,7 +69,8 @@ static bool dielectric_scatter(const Material *mat, const HitRecord *rec,
     } else {
         direction = v3f_reflect(norm_direction, rec->normal);
     }
-    *ray_out = (Ray){rec->point, direction, v3f_inv(direction)};
+    *ray_out =
+        (Ray){rec->point, direction, v3f_inv(direction), .length_sq = 0.0f};
     // FIXME: Ray.length_sq not explicitly initialized here
     return true;
 }

@@ -677,7 +677,7 @@ END_PARSE:
 
     scene->camera = camera;
     gettimeofday(&end, NULL);
-    float ms = (float)timersub_ms(&end, &start);
+    double ms = timersub_ms(&end, &start);
 
     Log(Log_Info, "load_scene: Loaded scene in %fms", ms);
 }

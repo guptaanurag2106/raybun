@@ -13,7 +13,7 @@ typedef struct {
 } State;
 
 typedef struct {
-    float perf;
+    double perf;
     long thread_count;
     int simd;  // future use
 

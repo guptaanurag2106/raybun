@@ -48,8 +48,8 @@ typedef struct {
 
 // Tile description used for tiling the image for distributed rendering
 typedef struct {
-    int x, y;    // top-left pixel coordinates in image
-    int tw, th;  // tile width and height
+    size_t x, y;    // top-left pixel coordinates in image
+    size_t tw, th;  // tile width and height
 } Tile;
 
 typedef enum {

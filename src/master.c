@@ -79,7 +79,7 @@ static enum MHD_Result answer_get_request(
                                      badrequest);
             }
 
-            unsigned int scene_crc = atoi(scene_crc_c);
+            int scene_crc = atoi(scene_crc_c);
             if (context->scene->scene_crc != scene_crc) {
                 Log(Log_Warn,
                     "Master: Worker '%s' sent wrong scene CRC: %u (expected "
@@ -388,10 +388,10 @@ static enum MHD_Result answer_get_request(
             }
 
             const char *hex_pixels = pixels->valuestring;
-            int expected_len =
+            size_t expected_len =
                 tile.tw * tile.th * 8;  // 8 hex chars per pixel (ARGB)
 
-            if ((int)strlen(hex_pixels) != expected_len) {
+            if (strlen(hex_pixels) != expected_len) {
                 cJSON_Delete(root);
                 Log(Log_Warn,
                     "Master: Pixel data length mismatch. Expected %d, got %zu",
@@ -402,15 +402,15 @@ static enum MHD_Result answer_get_request(
             }
 
             // Parse hex string and write to image buffer
-            for (int y = 0; y < tile.th; y++) {
-                for (int x = 0; x < tile.tw; x++) {
+            for (size_t y = 0; y < tile.th; y++) {
+                for (size_t x = 0; x < tile.tw; x++) {
                     char hex[9];
                     // FIX: better method (use binary POST or parse directly)
                     memcpy(hex, hex_pixels, 8);
                     hex[8] = '\0';
                     uint32_t pixel = (uint32_t)strtoul(hex, NULL, 16);
 
-                    int image_idx;
+                    size_t image_idx;
                     if (ms) {
                         image_idx =
                             (tile.y + y) * ms->image_width + (tile.x + x);

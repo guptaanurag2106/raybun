@@ -24,7 +24,7 @@ static inline float linear_to_gamma(float linear_component) {
 // argb
 static uint32_t pack_colour(Colour colour) {
     colour = v3f_clamp(colour, 0, 1);
-    return (((uint8_t)(255)) << 24) |
+    return (((255)) << 24) |
            (((uint8_t)(linear_to_gamma(colour.x) * 255)) << 16) |
            (((uint8_t)(linear_to_gamma(colour.y) * 255)) << 8) |
            ((uint8_t)(linear_to_gamma(colour.z) * 255));
@@ -98,22 +98,22 @@ static void render_single_tile_impl(
     int samples_per_pixel, int max_depth, const V3f *pixel00_loc,
     const V3f *pixel_delta_u, const V3f *pixel_delta_v,
     const V3f *defocus_disk_u, const V3f *defocus_disk_v,
-    float colour_contribution, int image_width, uint32_t *output_buffer) {
+    float colour_contribution, size_t image_width, uint32_t *output_buffer) {
     (void)image_width;
     long ray_count = 0;
     rng_seed_tls((uint32_t)time(NULL) ^ (uint32_t)(uintptr_t)pthread_self());
 
-    V3f row_start =
-        v3f_add(*pixel00_loc, v3f_add(v3f_mulf(*pixel_delta_u, tile->x),
-                                      v3f_mulf(*pixel_delta_v, tile->y)));
+    V3f row_start = v3f_add(*pixel00_loc,
+                            v3f_add(v3f_mulf(*pixel_delta_u, (float)tile->x),
+                                    v3f_mulf(*pixel_delta_v, (float)tile->y)));
 
-    for (int j = 0; j < tile->th; j++) {
-        for (int i = 0; i < tile->tw; i++) {
+    for (size_t j = 0; j < tile->th; j++) {
+        for (size_t i = 0; i < tile->tw; i++) {
             Colour colour = (V3f){0, 0, 0};
 
             V3f pixel_base =
-                v3f_add(row_start, v3f_add(v3f_mulf(*pixel_delta_u, i),
-                                           v3f_mulf(*pixel_delta_v, j)));
+                v3f_add(row_start, v3f_add(v3f_mulf(*pixel_delta_u, (float)i),
+                                           v3f_mulf(*pixel_delta_v, (float)j)));
 
             for (int s = 0; s < samples_per_pixel; s++) {
                 V3f pixel_center = v3f_add(
@@ -139,7 +139,7 @@ static void render_single_tile_impl(
                                  colour);
             }
 
-            int buffer_idx = j * tile->tw + i;
+            size_t buffer_idx = j * tile->tw + i;
             output_buffer[buffer_idx] =
                 pack_colour(v3f_mulf(colour, colour_contribution));
         }
@@ -219,8 +219,8 @@ static void *render_tile_distributed(void *arg) {
             &ms->defocus_disk_u, &ms->defocus_disk_v, ms->colour_contribution,
             ms->image_width, tmp);
 
-        for (int y = 0; y < assign->tile.th; y++) {
-            int dst_idx =
+        for (size_t y = 0; y < assign->tile.th; y++) {
+            size_t dst_idx =
                 (assign->tile.y + y) * ms->image_width + assign->tile.x;
             memcpy(&ms->image[dst_idx], &tmp[y * assign->tile.tw],
                    assign->tile.tw * sizeof(uint32_t));
@@ -235,18 +235,18 @@ static void *render_tile_distributed(void *arg) {
 }
 
 void render_scene_distributed(struct MasterState *master_state,
-                              long thread_count) {
+                              size_t thread_count) {
     struct timeval start, end;
     gettimeofday(&start, NULL);
 
     Log(Log_Info, "render_scene_distributed: Starting with %ld threads",
         thread_count);
     pthread_t *threads = malloc(thread_count * sizeof(pthread_t));
-    for (long i = 0; i < thread_count; i++) {
+    for (size_t i = 0; i < thread_count; i++) {
         pthread_create(&threads[i], NULL, render_tile_distributed,
                        master_state);
     }
-    for (long i = 0; i < thread_count; i++) pthread_join(threads[i], NULL);
+    for (size_t i = 0; i < thread_count; i++) pthread_join(threads[i], NULL);
     free(threads);
 
     gettimeofday(&end, NULL);
@@ -260,7 +260,7 @@ void render_single_tile(const Scene *scene, const Tile *tile, const Camera *cam,
                         const V3f *pixel00_loc, const V3f *pixel_delta_u,
                         const V3f *pixel_delta_v, const V3f *defocus_disk_u,
                         const V3f *defocus_disk_v, float colour_contribution,
-                        int image_width, uint32_t *output_buffer) {
+                        size_t image_width, uint32_t *output_buffer) {
     render_single_tile_impl(scene, tile, cam, samples_per_pixel, max_depth,
                             pixel00_loc, pixel_delta_u, pixel_delta_v,
                             defocus_disk_u, defocus_disk_v, colour_contribution,
@@ -282,18 +282,20 @@ static void *render_tile(void *arg) {
         if (curr_tile >= work->tile_count) break;
 
         Tile tile = work->tiles[curr_tile];
-        V3f row_start = v3f_add(work->pixel00_loc,
-                                v3f_add(v3f_mulf(work->pixel_delta_u, tile.x),
-                                        v3f_mulf(work->pixel_delta_v, tile.y)));
+        V3f row_start =
+            v3f_add(work->pixel00_loc,
+                    v3f_add(v3f_mulf(work->pixel_delta_u, (float)tile.x),
+                            v3f_mulf(work->pixel_delta_v, (float)tile.y)));
 
-        for (int j = tile.y; j < tile.y + tile.th; j++) {
-            for (int i = tile.x; i < tile.x + tile.tw; i++) {
+        for (size_t j = tile.y; j < tile.y + tile.th; j++) {
+            for (size_t i = tile.x; i < tile.x + tile.tw; i++) {
                 Colour colour = (V3f){0, 0, 0};
 
                 V3f pixel_base = v3f_add(
                     row_start,
-                    v3f_add(v3f_mulf(work->pixel_delta_u, (i - tile.x)),
-                            v3f_mulf(work->pixel_delta_v, (j - tile.y))));
+                    v3f_add(
+                        v3f_mulf(work->pixel_delta_u, (float)(i - tile.x)),
+                        v3f_mulf(work->pixel_delta_v, (float)(j - tile.y))));
 
                 for (int s = 0; s < work->samples_per_pixel; s++) {
                     V3f pixel_center = v3f_add(
@@ -327,7 +329,6 @@ static void *render_tile(void *arg) {
             }
         }
     }
-    atomic_fetch_add(&work->ray_count, ray_count);
 
     pthread_exit(NULL);
 }
@@ -359,7 +360,7 @@ void init_work(Scene *scene, State *state, Work *work) {
     const int tile_count =
         CEILF((float)width / TILE_WIDTH) * CEILF((float)height / TILE_HEIGHT);
 
-    Tile *tiles = malloc(sizeof(*tiles) * tile_count);
+    Tile *tiles = malloc(sizeof(*tiles) * (size_t)tile_count);
     Log(Log_Info, "Breaking into %d tiles", tile_count);
     if (tiles == NULL) {
         Log(Log_Warn, "render_scene: Could not allocate tiles");
@@ -377,7 +378,7 @@ void init_work(Scene *scene, State *state, Work *work) {
         }
     }
 
-    const float colour_contribution = 1.0f / state->samples_per_pixel;
+    const float colour_contribution = 1.0f / (float)state->samples_per_pixel;
 
     *work = (Work){
         .scene = scene,
@@ -386,7 +387,6 @@ void init_work(Scene *scene, State *state, Work *work) {
         .tile_finished = 0,
 
         .image = state->image,
-        .ray_count = 0,
 
         .width = width,
         .samples_per_pixel = state->samples_per_pixel,
@@ -421,11 +421,8 @@ void render_scene(Work *work, long thread_count) {
         pthread_join(thread[i], NULL);
     }
 
-    long ray_count = work->ray_count;
     gettimeofday(&end, NULL);
     double ms = timersub_ms(&end, &start);
-    double time_per_ray = ms / ray_count;
 
-    Log(Log_Info, "Rendered %ld rays in %ldms or %fms/ray", ray_count,
-        (long int)ms, time_per_ray);
+    Log(Log_Info, "Rendered in %ldms", (long int)ms);
 }

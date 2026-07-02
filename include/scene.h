@@ -24,7 +24,7 @@ Vector(Hittable, Hittables);
 Vector(Material, Materials);
 typedef struct {
     Arena arena;
-    unsigned int scene_crc;
+    int scene_crc;
     char *scene_json;
 
     int plane_count;
