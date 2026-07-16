@@ -74,7 +74,7 @@ static inline Hittable construct_bvh(Arena *a, Hittable *hittable, size_t start,
         return hittable[start];
     }
     if (count == 2) {
-        BVH_Node *node = ARENA_PUSH_STRUCT(a, BVH_Node);
+        BVH_Node *node = arena_alloc_struct(a, BVH_Node);
         node->left = hittable[start];
         node->right = hittable[end - 1];
         return make_hittable_bvh(node,
@@ -86,7 +86,7 @@ static inline Hittable construct_bvh(Arena *a, Hittable *hittable, size_t start,
         box = aabb_join(box, hittable[i].box);
     }
 
-    BVH_Node *node = ARENA_PUSH_STRUCT(a, BVH_Node);
+    BVH_Node *node = arena_alloc_struct(a, BVH_Node);
     if ((box.xmax - box.xmin) > (box.ymax - box.ymin)) {
         if ((box.xmax - box.xmin) > (box.zmax - box.zmin)) {
             g_sort_axis = 0;

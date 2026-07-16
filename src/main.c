@@ -53,7 +53,10 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
 
     Scene *scene = malloc(sizeof(Scene));
     memset(scene, 0, sizeof(Scene));
-    scene->arena = arena_create(1024 * 1024 * 256);  // 256MB
+    if (arena_create(&scene->arena, 1024 * 1024 * 256) < 0) {  // 256MB
+        Log(Log_Error, "get_device_stats: Failed to alloc arena");
+        return (MachineInfo){0};
+    }
     State *state = malloc(sizeof(State));
 
     char *file_content = read_compress_scene(perf_json_file);
@@ -190,12 +193,15 @@ int main(int argc, char **argv) {
     if (mode == 0 || mode == 2) {
         scene = malloc(sizeof(Scene));
         memset(scene, 0, sizeof(Scene));
-        scene->arena = arena_create(1024 * 1024 * 256);  // 256MB
+        if (arena_create(&scene->arena, 1024 * 1024 * 256) < 0) {  // 256MB
+            Log(Log_Error, "main: Failed to create Arena");
+            return 1;
+        }
         state = malloc(sizeof(State));
 
         scene_json = read_compress_scene(scene_json_file);
-        int scene_crc =
-            stbiw__crc32((unsigned char *)scene_json, strlen(scene_json));
+        int scene_crc = (int)stbiw__crc32((unsigned char *)scene_json,
+                                          (int)strlen(scene_json));
 
         load_scene(scene_json, scene, state);
         scene->scene_crc = scene_crc;

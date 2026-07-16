@@ -106,7 +106,10 @@ bool worker_connect(const char *master_ip, int port, MachineInfo stats) {
     // Load scene into local Scene and State
     Scene *scene = malloc(sizeof(Scene));
     memset(scene, 0, sizeof(Scene));
-    scene->arena = arena_create(1024 * 1024 * 128);
+    if (arena_create(&scene->arena, 1024 * 1024 * 128) < 0) {
+        Log(Log_Error, "worker_connect: Failed to alloc Arena");
+        return false;
+    }
     State *state = malloc(sizeof(State));
 
     load_scene(scene_json->valuestring, scene, state);
