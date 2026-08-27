@@ -2,9 +2,6 @@
 #define UTILS_H_
 
 #include <assert.h>
-#include <ctype.h>
-#include <errno.h>
-#include <math.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -100,17 +97,17 @@ UTILS_DEF void Log(enum Log_Level level, const char *format, ...);
 #define ARRAY_LENGTH(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
-#define UNREACHABLE(...)                                                  \
+#define UNREACHABLE(str)                                                  \
     do {                                                                  \
-        fprintf(stderr, "[UNREACHABLE]: %s:%d \n" #__VA_ARGS__, __FILE__, \
-                __LINE__);                                                \
-        exit(1);                                                          \
+        fprintf(stderr, "%s:%d: [UNREACHABLE]: %s\n", __FILE__, __LINE__, \
+                str);                                                     \
+        abort();                                                          \
     } while (0)
 
-#define TODO(...)                                                             \
-    do {                                                                      \
-        fprintf(stderr, "[TODO]: %s:%d \n" #__VA_ARGS__, __FILE__, __LINE__); \
-        exit(1);                                                              \
+#define TODO(str)                                                        \
+    do {                                                                 \
+        fprintf(stderr, "%s:%d: [TODO]: %s\n", __FILE__, __LINE__, str); \
+        abort();                                                         \
     } while (0)
 
 #define UNUSED(x) (void)(x)
@@ -126,15 +123,17 @@ UTILS_DEF char *generate_uuid(void);
 static inline double timersub_ms(const struct timeval *end,
                                  const struct timeval *start) {
     double res = 0.0;
-    res += (double)(end->tv_sec - start->tv_sec) * 1000.0;
-    res += (double)(end->tv_usec - start->tv_usec) * 0.001;
+    res += ((double)end->tv_sec - (double)start->tv_sec) * 1000.0;
+    res += ((double)end->tv_usec - (double)start->tv_usec) * 0.001;
     return res;
 }
 
 // ----------------------------------------------------------------------------
 //  Math Utils
 // ----------------------------------------------------------------------------
-#define PI 3.14159265359f
+#ifndef PI
+#define PI 3.14159265358979323846f
+#endif
 #define PI_2 (PI / 2)
 #define PI_3_4 (3.0f * PI / 4)
 #define PI_2_3 (2.0f * PI / 3)
@@ -174,6 +173,10 @@ static inline float lerp_float(float start, float end, float t) {
 CLAMP_TYPE(int)
 CLAMP_TYPE(float)
 
+UTILS_DEF bool is_space(const char s);
+
+UTILS_DEF bool is_digit(const char s);
+
 UTILS_DEF bool is_number(const char *s);
 
 // warn: no modulus: wrap when just went beyond boundary
@@ -196,13 +199,17 @@ typedef struct RNG {
     uint32_t state;
 } RNG;
 
-static RNG rng_state = (RNG){0x12345678u};
+static UTILS_TLS RNG rng_state = {0x12345678u};
 
 static inline void rng_seed(RNG *rng, uint32_t seed) {
     rng->state = seed ? seed : 0x12345678u;
 }
 static inline void rng_seed_tls(uint32_t seed) {
+#ifdef __cplusplus
+    rng_state = RNG{seed ? seed : 0x12345678u};
+#else
     rng_state = (RNG){seed ? seed : 0x12345678u};
+#endif
 }
 
 static inline uint32_t rng_u32(RNG *rng) {
@@ -214,13 +221,13 @@ static inline uint32_t rng_u32(RNG *rng) {
     return x;
 }
 
-static inline uint32_t rng_u32_tls() { return rng_u32(&rng_state); }
+static inline uint32_t rng_u32_tls(void) { return rng_u32(&rng_state); }
 
 static inline float rng_f32(RNG *rng) {
     return (rng_u32(rng) >> 8) * (1.0f / 16777216.0f);
 }
 
-static inline float rng_f32_tls() { return rng_f32(&rng_state); }
+static inline float rng_f32_tls(void) { return rng_f32(&rng_state); }
 
 static inline float rngf_range(RNG *rng, float min, float max) {
     return min + (max - min) * rng_f32(rng);
@@ -231,7 +238,7 @@ static inline float rngf_range_tls(float min, float max) {
 }
 
 static inline int rngi_range(RNG *rng, int min, int max) {
-    return (int)rngf_range(rng, min, max + 1);
+    return (int)rngf_range(rng, (float)min, (float)max + 1.0f);
 }
 
 static inline int rngi_range_tls(int min, int max) {
@@ -260,12 +267,13 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
         (v)->capacity = 0; \
     } while (0)
 
-#define vec__grow(items, capacity, elem_size)                        \
-    do {                                                             \
-        size_t new_cap = (*(capacity) == 0 ? 1 : (*(capacity) * 2)); \
-        void *new_items = realloc(*(items), new_cap * (elem_size));  \
-        *(items) = new_items;                                        \
-        *(capacity) = new_cap;                                       \
+#define vec__grow(items, capacity, elem_size)                                 \
+    do {                                                                      \
+        size_t new_cap =                                                      \
+            (*(capacity) == 0 ? 4 : (size_t)((double)(*(capacity)) * 1.618)); \
+        void *new_items = realloc(*(items), new_cap * (elem_size));           \
+        *(items) = new_items;                                                 \
+        *(capacity) = new_cap;                                                \
     } while (0)
 
 #define vec_reserve(v, n)                                            \
@@ -289,11 +297,31 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
 
 #define vec_back(v) vec_get(v, (v)->size - 1)
 
+#define vec_swap(v, i1, i2)                           \
+    do {                                              \
+        __typeof__(*(v)->items) t = ((v)->items[i1]); \
+        ((v)->items[i1]) = ((v)->items[i2]);          \
+        ((v)->items[i2]) = t;                         \
+    } while (0)
+
 #define vec_remove_swap(v, i)                      \
     do {                                           \
         (v)->items[i] = (v)->items[(v)->size - 1]; \
         --(v)->size;                               \
     } while (0)
+
+#define vec_reverse(v)                                    \
+    do {                                                  \
+        for (size_t _i = 0; _i < ((v)->size) / 2; _i++) { \
+            vec_swap(v, _i, (v)->size - _i - 1);          \
+        }                                                 \
+    } while (0)
+
+#define vec_subvec(v, start, end)                                 \
+    (__typeof__(*v)) {                                            \
+        .items = &((v)->items[start]), .size = ((end) - (start)), \
+        .capacity = (v)->capacity,                                \
+    }
 
 #define vec_search_first(v, item, cmp_fn)                \
     ({                                                   \
@@ -303,6 +331,10 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
         }                                                \
         i;                                               \
     })
+
+#define vec_foreach(v, it)                                                    \
+    for (__typeof__((v)->items) it = (v)->items; it < (v)->items + (v)->size; \
+         it++)
 
 #define vec_clear(v) ((v)->size = 0)
 
@@ -323,21 +355,32 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
         p;                    \
     })
 
+#define vec_copy(v_src, v_dest)                                               \
+    do {                                                                      \
+        (v_dest)->size = (v_src)->size;                                       \
+        (v_dest)->capacity = (v_src)->capacity;                               \
+        (v_dest)->items = realloc((v_dest)->items,                            \
+                                  (v_dest)->size * sizeof(*(v_dest)->items)); \
+        memcpy((v_dest)->items, (v_src)->items,                               \
+               (v_dest)->size * sizeof(*(v_dest)->items));                    \
+    } while (0)
+
 // ----------------------------------------------------------------------------
 //  String Utils
 // ----------------------------------------------------------------------------
-UTILS_DEF char *strdup(const char *src);
-
 #define UTILS_MAX_TEMP_SIZE 1024 * 100
 UTILS_DEF char *combine_charp(const char *str1, const char *str2);
 // Will use the utils_static_temp_buffer and reset it everytime its filled
 #define COMBINE(separator, ...) \
     combine_strings_with_sep_(separator, __VA_ARGS__, NULL)
-// Will use the utils_static_temp_buffer and reset it everytime its filled,
-// last va_arg should be NULL
-UTILS_DEF char *combine_strings_with_sep_(const char *separator, ...);
 // Will use the utils_static_temp_buffer and reset it everytime its filled
 UTILS_DEF char *temp_sprintf(const char *format, ...);
+
+// Minify string in place
+UTILS_DEF void minify_str(char *str);
+
+// Escape string (internally mallocs)
+UTILS_DEF char *escape_str(char *str);
 
 // ----------------------------------------------------------------------------
 //  File Utils
@@ -350,6 +393,10 @@ UTILS_DEF char *read_entire_file(const char *filename);
 #endif  // UTILS_H_
 
 #ifdef UTILS_IMPLEMENTATION
+#include <errno.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 static FILE *_log_output_file = NULL;
 
@@ -410,7 +457,7 @@ UTILS_DEF void Log(enum Log_Level level, const char *format, ...) {
     fprintf(out, "\n");
 }
 
-UTILS_DEF char *generate_uuid() {
+UTILS_DEF char *generate_uuid(void) {
     char v[] = {'0', '1', '2', '3', '4', '5', '6', '7',
                 '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
     char *buf = (char *)malloc(sizeof(char) * (37));
@@ -431,6 +478,18 @@ UTILS_DEF char *generate_uuid() {
     buf[36] = '\0';
 
     return buf;
+}
+
+UTILS_DEF bool is_space(const char s) {
+    if (s == '\f' || s == '\n' || s == '\r' || s == '\t' || s == '\v') {
+        return true;
+    }
+    return false;
+}
+
+UTILS_DEF bool is_digit(const char s) {
+    if (s >= '0' && s <= '9') return true;
+    return false;
 }
 
 UTILS_DEF bool is_number(const char *s) {
@@ -483,15 +542,15 @@ UTILS_DEF int calculate_infix(const char *expr) {
 
     const char *p = expr;
     while (*p) {
-        if (isspace(*p)) {
+        if (is_space(*p)) {
             p++;
             continue;
         }
 
         // Parse number
-        if (isdigit(*p)) {
+        if (is_digit(*p)) {
             int val = 0;
-            while (isdigit(*p)) {
+            while (is_digit(*p)) {
                 val = val * 10 + (*p - '0');
                 p++;
             }
@@ -537,22 +596,7 @@ UTILS_DEF bool triangle_is_inside(float x1, float y1, float x2, float y2,
     return (A == A1 + A2 + A3);
 }
 
-UTILS_DEF char *strdup(const char *src) {
-    if (src == NULL) return NULL;
-
-    size_t len = strlen(src);
-    char *dst = malloc(sizeof(char) * (len + 1));
-    if (dst == NULL) {
-        Log(Log_Error, "strdup: malloc failed");
-        return NULL;
-    }
-
-    char *ptr = dst;
-    while ((*ptr++ = *src++));
-
-    return dst;
-}
-
+// TODO:make them thread local?
 static char utils_static_temp_buffer[UTILS_MAX_TEMP_SIZE];
 static uint32_t utils_static_temp_buffer_pos = 0;
 
@@ -560,6 +604,8 @@ UTILS_DEF char *combine_charp(const char *str1, const char *str2) {
     return temp_sprintf("%s%s", str1, str2);
 }
 
+// Will use the utils_static_temp_buffer and reset it everytime its filled,
+// last va_arg should be NULL
 UTILS_DEF char *combine_strings_with_sep_(const char *separator, ...) {
     va_list args;
 
@@ -569,7 +615,7 @@ UTILS_DEF char *combine_strings_with_sep_(const char *separator, ...) {
 
     va_start(args, separator);
     const char *s = va_arg(args, const char *);
-    int count = 0;
+    size_t count = 0;
     while (s != NULL) {
         total_len += strlen(s);
         s = va_arg(args, const char *);
@@ -596,7 +642,6 @@ UTILS_DEF char *combine_strings_with_sep_(const char *separator, ...) {
 
     va_start(args, separator);
     s = va_arg(args, const char *);
-    int i = 0;
     while (s != NULL) {
         size_t len = strlen(s);
         memcpy(current, s, len);
@@ -608,7 +653,6 @@ UTILS_DEF char *combine_strings_with_sep_(const char *separator, ...) {
             memcpy(current, separator, sep_len);
             current += sep_len;
         }
-        i++;
     }
     va_end(args);
 
@@ -633,7 +677,7 @@ UTILS_DEF char *temp_sprintf(const char *format, ...) {
         return NULL;
     }
 
-    if (utils_static_temp_buffer_pos + n + 1 > UTILS_MAX_TEMP_SIZE) {
+    if (utils_static_temp_buffer_pos + (uint32_t)n + 1 > UTILS_MAX_TEMP_SIZE) {
         // Log(Log_Info, "temp_sprintf: clearing existing buffer");
         utils_static_temp_buffer_pos = 0;
     }
@@ -644,25 +688,109 @@ UTILS_DEF char *temp_sprintf(const char *format, ...) {
     va_end(args);
 
     char *ret = utils_static_temp_buffer + utils_static_temp_buffer_pos;
-    utils_static_temp_buffer_pos += n + 1;
+    utils_static_temp_buffer_pos += (uint32_t)n + 1;
 
     return ret;
 }
 
+UTILS_DEF void minify_str(char *str) {
+    if (str == NULL || *str == '\0') return;
+
+    char *out = str;
+    int in_string = 0;
+    while (*str != '\0') {
+        if (!in_string) {
+            while (*str == ' ' || *str == '\t' || *str == '\n' ||
+                   *str == '\r') {
+                str++;
+            }
+        }
+        if (*str == '\0') break;
+
+        if (*str == '"' || *str == '\'' || *str == '`') {
+            // TODO:check for escaping
+            if (!in_string) {
+                in_string = 1;
+            } else {
+                in_string = 0;
+            }
+        }
+        *out = *str;
+        out++;
+        str++;
+    }
+
+    *out = '\0';
+}
+
+UTILS_DEF char *escape_str(char *str) {
+    if (str == NULL) return NULL;
+    if (*str == '\0') {
+        char *res = malloc(sizeof(char) * 1);
+        ASSERT(res && "escape_str malloc failed");
+        *res = '\0';
+        return res;
+    }
+    size_t len = 0;
+    char *copy = str;
+    while (*copy != '\0') {
+        if (*copy == '"' || *copy == '\'' || *copy == '\\') {
+            len++;
+        } else if (*copy == '\n' || *copy == '\r' || *copy == '\t') {
+            len += 2;
+        }
+        len++;
+        copy++;
+    }
+    char *res = malloc(sizeof(char) * (len + 1));
+    ASSERT(res && "escape_str malloc failed");
+    len = 0;
+    while (*str != 0) {
+        if (*str == '"' || *str == '\'' || *str == '\\') {
+            res[len++] = '\\';
+            res[len++] = *str;
+        } else if (*str == '\n') {
+            res[len++] = '\\';
+            res[len++] = '\n';
+        } else if (*str == '\r') {
+            res[len++] = '\\';
+            res[len++] = '\r';
+        } else if (*str == '\t') {
+            res[len++] = '\\';
+            res[len++] = '\t';
+        } else {
+            res[len++] = *str;
+        }
+        str++;
+    }
+    res[len] = '\0';
+    return res;
+}
+
 UTILS_DEF char *read_entire_file(const char *filename) {
     if (filename == NULL || strlen(filename) == 0) {
-        Log(Log_Warn, "read_entire_file: Invalid file name");
+        Log(Log_Error, "read_entire_file: Invalid file name");
         return NULL;
     }
     FILE *f = fopen(filename, "r");
     if (f == NULL) {
-        Log(Log_Error,
-            temp_sprintf("read_entire_file: Cannot open file %s: %s ", filename,
-                         strerror(errno)));
+        Log(Log_Error, temp_sprintf("read_entire_file: Cannot open file %s: %s",
+                                    filename, strerror(errno)));
         return NULL;
     }
-    fseek(f, 0, SEEK_END);
+    if (fseek(f, 0, SEEK_END) < 0) {
+        Log(Log_Error, temp_sprintf("read_entire_file: Cannot read file %s: %s",
+                                    filename, strerror(errno)));
+        return NULL;
+    }
     long file_size = ftell(f);
+    if (file_size < 0) {
+        Log(Log_Error,
+            temp_sprintf("read_entire_file: Cannot get file size of %s: %s",
+                         filename, strerror(errno)));
+        return NULL;
+    }
+
     fseek(f, 0, SEEK_SET);
 
     char *contents = (char *)malloc((file_size + 1) * sizeof(char));
@@ -672,8 +800,26 @@ UTILS_DEF char *read_entire_file(const char *filename) {
                          filename));
         return NULL;
     }
-    fread(contents, file_size, 1, f);
-    contents[file_size] = '\0';
+    size_t read = fread(contents, 1, file_size, f);
+    if (read != (size_t)file_size) {
+        if (ferror(f)) {
+            Log(Log_Error,
+                temp_sprintf("read_entire_file: Error while reading %s: "
+                             "read %zu bytes out of %zu, %s",
+                             filename, read, file_size, strerror(errno)));
+            clearerr(f);
+        } else {
+            Log(Log_Error,
+                temp_sprintf("read_entire_file: Error while reading %s: "
+                             "read %zu bytes out of %ld",
+                             filename, read, file_size));
+        }
+    }
+    if (ferror(f)) {
+        Log(Log_Error, temp_sprintf("read_entire_file: Error while reading %s:",
+                                    filename, strerror(errno)));
+    }
+    contents[read] = '\0';
     fclose(f);
 
     return contents;
