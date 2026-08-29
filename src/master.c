@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <cJSON.h>
 #include <microhttpd.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -7,7 +8,7 @@
 #include <string.h>
 
 #include "api.h"
-#include "cJSON.h"
+#include "json.h"
 #include "libmicrohttpd-1.0.1/src/include/microhttpd.h"
 #include "utils.h"
 
@@ -265,7 +266,7 @@ static enum MHD_Result answer_get_request(
             return MHD_YES;
         }
 
-        cJSON *root = NULL;
+        Json *root = NULL;
         if (!ci->processed) {
             ci->processed = 1;
             char *json_data = NULL;
@@ -280,7 +281,8 @@ static enum MHD_Result answer_get_request(
                 fread(json_data, 1, ci->received, ci->tmpfile);
                 json_data[ci->received] = '\0';
             }
-            root = cJSON_Parse(json_data);
+            Json_Error err = {0};
+            root = json_parse_string(json_data, &err);
             free(json_data);
         }
 
@@ -292,31 +294,30 @@ static enum MHD_Result answer_get_request(
             }
 
             MachineInfo info = {0};
-            cJSON *name = cJSON_GetObjectItemCaseSensitive(root, "name");
-            cJSON *perf = cJSON_GetObjectItemCaseSensitive(root, "perf");
-            cJSON *thread_count =
-                cJSON_GetObjectItemCaseSensitive(root, "thread_count");
-            cJSON *simd = cJSON_GetObjectItemCaseSensitive(root, "simd");
+            const Json *name = json_find(root, "name");
+            const Json *perf = json_find(root, "perf");
+            const Json *thread_count = json_find(root, "thread_count");
+            const Json *simd = json_find(root, "simd");
 
-            if (!cJSON_IsNumber(perf) || !cJSON_IsNumber(thread_count) ||
-                !cJSON_IsNumber(simd) || !cJSON_IsString(name)) {
+            if (!json_is_number(perf) || !json_is_integer(thread_count) ||
+                !json_is_integer(simd) || !json_is_string(name)) {
                 Log(Log_Warn, "Master: /api/register received invalid JSON");
-                cJSON_Delete(root);
+                json_free(root);
                 return send_response(connection, MHD_HTTP_BAD_REQUEST,
                                      "{\"error\":\"Invalid JSON parameters\"}");
             }
 
             // TODO: check unique names
-            info.name = strdup(name->valuestring);
-            info.perf = perf->valuedouble;
-            info.thread_count = thread_count->valueint;
+            info.name = strdup(json_cstring(name));
+            info.perf = json_number(perf);
+            info.thread_count = json_integer(thread_count);
             if (info.thread_count <= 0 || info.perf < 0 || info.perf > 10) {
                 Log(Log_Warn, "Master: /api/register received invalid JSON");
-                cJSON_Delete(root);
+                json_free(root);
                 return send_response(connection, MHD_HTTP_BAD_REQUEST,
                                      "{\"error\":\"Invalid JSON parameters\"}");
             }
-            info.simd = simd->valueint;
+            info.simd = (int)json_integer(simd);
 
             Log(Log_Info, "Master: Registering worker '%s' (Perf: %.2f)",
                 info.name, info.perf);
@@ -329,7 +330,7 @@ static enum MHD_Result answer_get_request(
                     info.name, context->master_state->workers.size - 1);
             }
 
-            cJSON_Delete(root);
+            json_free(root);
             return send_response(connection, MHD_HTTP_OK, "{\"success\":true}");
         }
 
@@ -340,24 +341,24 @@ static enum MHD_Result answer_get_request(
                                      "{\"error\":\"Invalid JSON\"}");
             }
 
-            cJSON *name = cJSON_GetObjectItemCaseSensitive(root, "name");
-            cJSON *tile_id = cJSON_GetObjectItemCaseSensitive(root, "tile_id");
-            cJSON *pixels = cJSON_GetObjectItemCaseSensitive(root, "pixels");
+            const Json *name = json_find(root, "name");
+            const Json *tile_id = json_find(root, "tile_id");
+            const Json *pixels = json_find(root, "pixels");
 
-            if (!cJSON_IsNumber(tile_id) || !cJSON_IsString(pixels) ||
-                !cJSON_IsString(name)) {
-                cJSON_Delete(root);
+            if (!json_is_integer(tile_id) || !json_is_string(pixels) ||
+                !json_is_string(name)) {
+                json_free(root);
                 return send_response(connection, MHD_HTTP_BAD_REQUEST,
                                      "{\"error\":\"Invalid JSON parameters\"}");
             }
 
             // TODO: check if worker registered, and for that tile
-            const char *worker_name = name->valuestring;
+            const char *worker_name = strdup(json_cstring(name));
 
-            int tid = tile_id->valueint;
+            int tid = (int)json_integer(tile_id);
             // TODO: check if tile already done
             if (tid < 0 || tid >= context->work->tile_count) {
-                cJSON_Delete(root);
+                json_free(root);
                 Log(Log_Warn, "Master: Worker sent invalid tile_id %d", tid);
                 return send_response(connection, MHD_HTTP_BAD_REQUEST,
                                      "{\"error\":\"Invalid tile_id\"}");
@@ -376,7 +377,7 @@ static enum MHD_Result answer_get_request(
             }
             if (ms) {
                 if (tid < 0 || tid >= ms->tile_count) {
-                    cJSON_Delete(root);
+                    json_free(root);
                     Log(Log_Warn, "Master: Worker sent invalid tile_id %d",
                         tid);
                     return send_response(connection, MHD_HTTP_BAD_REQUEST,
@@ -387,12 +388,12 @@ static enum MHD_Result answer_get_request(
                 tile = context->work->tiles[tid];
             }
 
-            const char *hex_pixels = pixels->valuestring;
+            const char *hex_pixels = json_cstring(pixels);
             size_t expected_len =
                 tile.tw * tile.th * 8;  // 8 hex chars per pixel (ARGB)
 
             if (strlen(hex_pixels) != expected_len) {
-                cJSON_Delete(root);
+                json_free(root);
                 Log(Log_Warn,
                     "Master: Pixel data length mismatch. Expected %d, got %zu",
                     expected_len, strlen(hex_pixels));
@@ -452,7 +453,7 @@ static enum MHD_Result answer_get_request(
                     tid, worker_name);
             }
 
-            cJSON_Delete(root);
+            json_free(root);
             return send_response(connection, MHD_HTTP_OK, "{\"success\":true}");
         }
 

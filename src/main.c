@@ -6,6 +6,8 @@
 
 #include "api.h"
 #include "imagerw.h"
+#define JSON_IMPLEMENTATION
+#include "json.h"
 #include "libmicrohttpd-1.0.1/src/include/microhttpd.h"
 #include "renderer.h"
 #define ARENA_IMPLEMENTATION
@@ -30,8 +32,6 @@ static void usage(const char *prog_name) {
     printf("      Connect to master and render assigned tiles\n\n");
     printf("  standalone <SCENE> [OUTPUT]\n");
     printf("      Render locally (single process)\n\n");
-    printf("  benchmark <SCENE>\n");
-    printf("      Run performance benchmark on this machine\n\n");
     printf("Arguments:\n");
     printf("  PORT           Port to listen on (master mode)\n");
     printf("  SCENE          Scene description file (JSON)\n");
@@ -48,7 +48,7 @@ static void print_args_error(const char *prog_name, const char *error) {
     exit(1);
 }
 
-static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
+static MachineInfo get_device_stats(char *name) {
     Log_set_level(Log_Warn);
 
     Scene *scene = malloc(sizeof(Scene));
@@ -59,10 +59,8 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
     }
     State *state = malloc(sizeof(State));
 
-    char *file_content = read_compress_scene(perf_json_file);
-    load_scene(file_content, scene, state);
-    free(file_content);
-
+#include "benchmark.h"
+    load_scene(benchmark_json_content, scene, state);
     Work *work = malloc(sizeof(Work));
 
     struct timeval start, end;
@@ -99,9 +97,9 @@ static MachineInfo get_device_stats(const char *perf_json_file, char *name) {
                          .name = name};
 
     Log(Log_Info,
-        "Benchmark results for %s: Rendered %s in %.0fms, "
+        "Benchmark results for %s: Rendered benchmark in %.0fms, "
         "Performance Score: %.2f/10, Thread Count: %d, SIMD type %d.",
-        name, perf_json_file, ms, perf_score, thread_count, simd);
+        name, ms, perf_score, thread_count, simd);
     return stats;
 }
 
@@ -114,8 +112,7 @@ int main(int argc, char **argv) {
     }
 
     int mode = 0;
-    char *scene_json_file = "data/simple_scene.json";
-    char *perf_json_file = "data/benchmark.json";
+    char *scene_json_file = "./data/simple_scene.json";
     char *output_name = NULL;
 
     int port;
@@ -151,7 +148,6 @@ int main(int argc, char **argv) {
                 print_args_error(prog_name,
                                  "missing required argument <MASTER_URL>");
             }
-            perf_json_file = "data/benchmark.json";  // used for benchmark
             master_url = shift(&argc, &argv);
             if (argc > 0) device_name = shift(&argc, &argv);
             mode = 1;
@@ -165,11 +161,6 @@ int main(int argc, char **argv) {
                 output_name = shift(&argc, &argv);
             }
             mode = 2;
-        } else if (strncmp(flag, "benchmark", 9) == 0) {
-            if (argc > 0) {
-                perf_json_file = shift(&argc, &argv);
-            }
-            mode = 3;
         } else if (strncmp(flag, "-h", 2) == 0 ||
                    strncmp(flag, "--help", 6) == 0) {
             usage(prog_name);
@@ -179,9 +170,8 @@ int main(int argc, char **argv) {
                              temp_sprintf("unexpected option '%s'", flag));
         }
     }
-    UNUSED(master_url);
 
-    MachineInfo stats = get_device_stats(perf_json_file, device_name);
+    MachineInfo stats = get_device_stats(device_name);
 
     if (mode == 3) {
         exit(0);

@@ -3,6 +3,7 @@
 #include <time.h>
 
 #include "api.h"
+#include "json.h"
 #include "renderer.h"
 #include "scene.h"
 #include "utils.h"
@@ -84,7 +85,8 @@ bool worker_connect(const char *master_ip, int port, MachineInfo stats) {
         return false;
     }
 
-    cJSON *root = cJSON_Parse(scene_resp);
+    Json_Error err = {0};
+    Json *root = json_parse_string(scene_resp, &err);
     if (!root) {
         Log(Log_Error, "Worker: Invalid JSON from /api/scene");
         free(scene_resp);
@@ -92,11 +94,11 @@ bool worker_connect(const char *master_ip, int port, MachineInfo stats) {
         curl_global_cleanup();
         return false;
     }
-    cJSON *scene_json = cJSON_GetObjectItemCaseSensitive(root, "scene_json");
-    cJSON *scene_crc_j = cJSON_GetObjectItemCaseSensitive(root, "scene_crc");
-    if (!cJSON_IsString(scene_json)) {
+    const Json *scene_json = json_find(root, "scene_json");
+    const Json *scene_crc_j = json_find(root, "scene_crc");
+    if (!json_is_string(scene_json)) {
         Log(Log_Error, "Worker: /api/scene missing scene_json");
-        cJSON_Delete(root);
+        json_free(root);
         free(scene_resp);
         curl_easy_cleanup(curl);
         curl_global_cleanup();
@@ -112,13 +114,13 @@ bool worker_connect(const char *master_ip, int port, MachineInfo stats) {
     }
     State *state = malloc(sizeof(State));
 
-    load_scene(scene_json->valuestring, scene, state);
-    scene->scene_json = strdup(scene_json->valuestring);
-    if (cJSON_IsNumber(scene_crc_j)) {
-        scene->scene_crc = scene_crc_j->valueint;
+    load_scene(json_cstring(scene_json), scene, state);
+    scene->scene_json = strdup(json_cstring(scene_json));
+    if (json_is_integer(scene_crc_j)) {
+        scene->scene_crc = (int)json_integer(scene_crc_j);
     }
 
-    cJSON_Delete(root);
+    json_free(root);
     free(scene_resp);
 
     // 2) Register (best-effort)
@@ -153,30 +155,31 @@ bool worker_connect(const char *master_ip, int port, MachineInfo stats) {
         char *work_resp = http_get(curl, work_url);
         if (!work_resp) break;
 
-        cJSON *workj = cJSON_Parse(work_resp);
+        Json_Error err = {0};
+        Json *workj = json_parse_string(work_resp, &err);
         free(work_resp);
         if (!workj) break;
 
-        if (cJSON_GetObjectItemCaseSensitive(workj, "status")) {
+        if (json_find(workj, "status")) {
             // no tiles left or error
-            cJSON_Delete(workj);
+            json_free(workj);
             break;
         }
 
-        cJSON *tilej = cJSON_GetObjectItemCaseSensitive(workj, "tile");
-        cJSON *tile_id_j = cJSON_GetObjectItemCaseSensitive(workj, "tile_id");
+        const Json *tilej = json_find(workj, "tile");
+        const Json *tile_id_j = json_find(workj, "tile_id");
         if (!tilej || !tile_id_j) {
-            cJSON_Delete(workj);
+            json_free(workj);
             break;
         }
 
         Tile tile = {0};
-        tile.x = cJSON_GetObjectItemCaseSensitive(tilej, "x")->valueint;
-        tile.y = cJSON_GetObjectItemCaseSensitive(tilej, "y")->valueint;
-        tile.tw = cJSON_GetObjectItemCaseSensitive(tilej, "tw")->valueint;
-        tile.th = cJSON_GetObjectItemCaseSensitive(tilej, "th")->valueint;
-        int tid = tile_id_j->valueint;
-        cJSON_Delete(workj);
+        tile.x = (size_t)json_integer(json_find(tilej, "x"));
+        tile.y = (size_t)json_integer(json_find(tilej, "y"));
+        tile.tw = (size_t)json_integer(json_find(tilej, "tw"));
+        tile.th = (size_t)json_integer(json_find(tilej, "th"));
+        int tid = (int)json_integer(tile_id_j);
+        json_free(workj);
 
         uint32_t *buf = malloc(tile.tw * tile.th * sizeof(uint32_t));
         if (!buf) break;

@@ -1,5 +1,6 @@
 #include "imagerw.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 

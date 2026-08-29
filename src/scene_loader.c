@@ -1,4 +1,3 @@
-#include <cJSON.h>
 #include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -8,6 +7,7 @@
 
 #include "aabb.h"
 #include "common.h"
+#include "json.h"
 #include "rinternal.h"
 #include "utils.h"
 #include "vec.h"
@@ -30,49 +30,66 @@ void print_summary(const Scene *scene, const State *state) {
 }
 
 // TODO: check what all actually needs to be normalized
-static V3f parse_v3f(const cJSON *arr, const char *ctx, const V3f fallback) {
-    if (!cJSON_IsArray(arr) || cJSON_GetArraySize(arr) != 3) {
+static double json_value_number(const Json_Value *value) {
+    if (value == NULL) return 0.0;
+    return value->data_kind == JSON_INTEGER ? value->data.intval
+                                            : value->data.realval;
+}
+
+static V3f parse_v3f(const Json *arr, const char *ctx, const V3f fallback) {
+    if (!json_is_array(arr) || json_array_size(arr) != 3) {
         log_warn(temp_sprintf("%s: expected array[3], using default.", ctx));
         return fallback;
     }
-    return (V3f){cJSON_GetArrayItem(arr, 0)->valuedouble,
-                 cJSON_GetArrayItem(arr, 1)->valuedouble,
-                 cJSON_GetArrayItem(arr, 2)->valuedouble};
-}
 
-static float parse_float(const cJSON *node, const char *ctx, float fallback) {
-    if (!cJSON_IsNumber(node)) {
-        log_warn(temp_sprintf("s%: expected number, using default.", ctx));
+    const Json_Value *x = json_array_at(arr, 0);
+    const Json_Value *y = json_array_at(arr, 1);
+    const Json_Value *z = json_array_at(arr, 2);
+    if ((x->data_kind != JSON_INTEGER && x->data_kind != JSON_REAL) ||
+        (y->data_kind != JSON_INTEGER && y->data_kind != JSON_REAL) ||
+        (z->data_kind != JSON_INTEGER && z->data_kind != JSON_REAL)) {
+        log_warn(
+            temp_sprintf("%s: expected numeric array[3], using default.", ctx));
         return fallback;
     }
-    return (float)node->valuedouble;
+
+    return (V3f){(float)json_value_number(x), (float)json_value_number(y),
+                 (float)json_value_number(z)};
 }
 
-static int parse_int(const cJSON *node, const char *ctx, int fallback) {
-    if (!cJSON_IsNumber(node)) {
+static float parse_float(const Json *node, const char *ctx, float fallback) {
+    if (!json_is_number(node)) {
+        log_warn(temp_sprintf("%s: expected number, using default.", ctx));
+        return fallback;
+    }
+    return (float)json_number(node);
+}
+
+static int parse_int(const Json *node, const char *ctx, int fallback) {
+    if (!json_is_integer(node)) {
         log_warn(temp_sprintf("%s: expected integer, using default.", ctx));
         return fallback;
     }
-    return node->valueint;
+    return (int)json_integer(node);
 }
 
-static int parse_mat_index(const cJSON *node, size_t mat_count,
+static int parse_mat_index(const Json *node, size_t mat_count,
                            const char *ctx) {
-    if (!cJSON_IsNumber(node) || node->valueint < 0 ||
-        node->valueint >= (int)mat_count) {
+    if (!json_is_integer(node) || json_integer(node) < 0 ||
+        json_integer(node) >= (int)mat_count) {
         log_warn(temp_sprintf("%s: invalid material index.", ctx));
         return -1;
     }
-    return node->valueint;
+    return (int)json_integer(node);
 }
 
-static char *parse_string(const cJSON *node, const char *ctx) {
-    if (!cJSON_IsString(node)) {
+static char *parse_string(const Json *node, const char *ctx) {
+    if (!json_is_string(node)) {
         log_warn(temp_sprintf("%s: expected string.", ctx));
         return NULL;
     }
 
-    return node->valuestring;
+    return json_cstring(node);
 }
 
 static Quad make_quad(V3f corner, V3f u, V3f v, int mat_index) {
@@ -114,7 +131,7 @@ static inline void append_hittable(Scene *scene, Hittable h) {
 
 static void append_sphere(Scene *scene, Sphere sphere) {
     scene->sphere_count++;
-    Sphere *sphere_data = ARENA_PUSH_STRUCT(&scene->arena, Sphere);
+    Sphere *sphere_data = arena_alloc_struct(&scene->arena, Sphere);
     *sphere_data = sphere;
 
     Hittable h = make_hittable_sphere(sphere_data);
@@ -123,7 +140,7 @@ static void append_sphere(Scene *scene, Sphere sphere) {
 
 static void append_plane(Scene *scene, Plane plane) {
     scene->plane_count++;
-    Plane *plane_data = ARENA_PUSH_STRUCT(&scene->arena, Plane);
+    Plane *plane_data = arena_alloc_struct(&scene->arena, Plane);
     *plane_data = plane;
     Hittable h = make_hittable_plane(plane_data);
     append_hittable(scene, h);
@@ -131,7 +148,7 @@ static void append_plane(Scene *scene, Plane plane) {
 
 static void append_triangle(Scene *scene, Triangle triangle) {
     scene->triangle_count++;
-    Triangle *triangle_data = ARENA_PUSH_STRUCT(&scene->arena, Triangle);
+    Triangle *triangle_data = arena_alloc_struct(&scene->arena, Triangle);
     *triangle_data = triangle;
     Hittable h = make_hittable_triangle(triangle_data);
     append_hittable(scene, h);
@@ -139,7 +156,7 @@ static void append_triangle(Scene *scene, Triangle triangle) {
 
 static void append_quad(Scene *scene, Quad quad) {
     scene->quad_count++;
-    Quad *quad_data = ARENA_PUSH_STRUCT(&scene->arena, Quad);
+    Quad *quad_data = arena_alloc_struct(&scene->arena, Quad);
     *quad_data = quad;
     Hittable h = make_hittable_quad(quad_data);
     append_hittable(scene, h);
@@ -181,8 +198,8 @@ static void add_box(Scene *scene, V3f a, V3f b, int mat_index) {
 }
 
 Vector(char *, MatNames);
-static void parse_mtl(const char *name, MatNames *material_names,
-                      Materials *materials) {}
+// static void parse_mtl(const char *name, MatNames *material_names,
+//                       Materials *materials) {}
 
 static void add_model(Scene *scene, V3f position, float scale,
                       const char *file_name, Materials *scene_mats) {
@@ -303,7 +320,7 @@ static void add_model(Scene *scene, V3f position, float scale,
         if (strncmp(ptr, "mtllib ", 7) == 0) {
             matllib = strdup(ptr + 7);
             matllib[strcspn(matllib, "\r\n")] = 0;
-            parse_mtl(matllib, &material_names, scene_mats);
+            // parse_mtl(matllib, &material_names, scene_mats);
             Log(Log_Info, "load_scene: mtllib using %s", matllib);
             continue;
         }
@@ -356,11 +373,11 @@ static void add_model(Scene *scene, V3f position, float scale,
     fclose(f);
 }
 
-static int parse_quad(Scene *scene, const cJSON *qnode) {
-    const cJSON *corner = cJSON_GetObjectItemCaseSensitive(qnode, "corner");
-    const cJSON *u = cJSON_GetObjectItemCaseSensitive(qnode, "u");
-    const cJSON *v = cJSON_GetObjectItemCaseSensitive(qnode, "v");
-    const cJSON *mat_i = cJSON_GetObjectItemCaseSensitive(qnode, "material");
+static int parse_quad(Scene *scene, const Json_Value *qnode) {
+    const Json *corner = json_value_find(qnode, "corner");
+    const Json *u = json_value_find(qnode, "u");
+    const Json *v = json_value_find(qnode, "v");
+    const Json *mat_i = json_value_find(qnode, "material");
 
     int mi = parse_mat_index(mat_i, scene->materials.size, "quad.material");
     if (mi < 0) return 0;
@@ -373,11 +390,11 @@ static int parse_quad(Scene *scene, const cJSON *qnode) {
     return 1;
 }
 
-static int parse_triangle(Scene *scene, const cJSON *tnode) {
-    const cJSON *p1 = cJSON_GetObjectItemCaseSensitive(tnode, "p1");
-    const cJSON *p2 = cJSON_GetObjectItemCaseSensitive(tnode, "p2");
-    const cJSON *p3 = cJSON_GetObjectItemCaseSensitive(tnode, "p3");
-    const cJSON *mat_i = cJSON_GetObjectItemCaseSensitive(tnode, "material");
+static int parse_triangle(Scene *scene, const Json_Value *tnode) {
+    const Json *p1 = json_value_find(tnode, "p1");
+    const Json *p2 = json_value_find(tnode, "p2");
+    const Json *p3 = json_value_find(tnode, "p3");
+    const Json *mat_i = json_value_find(tnode, "material");
 
     int mi = parse_mat_index(mat_i, scene->materials.size, "triangle.material");
     if (mi < 0) return 0;
@@ -398,7 +415,8 @@ static int parse_triangle(Scene *scene, const cJSON *tnode) {
 char *read_compress_scene(const char *scene_file) {
     char *file = read_entire_file(scene_file);
     if (!file) fatal("load_scene: Cannot read file.");
-    cJSON_Minify(file);
+    // TODO:
+    // cJSON_Minify(file);
     return file;
 }
 
@@ -408,15 +426,13 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
 
     scene->objects = (Hittables){0};
 
-    cJSON *json = cJSON_Parse(scene_file_content);
+    // printf("|%s|\n", scene_file_content);
+    Json_Error err = {0};
+    Json *json = json_parse_string(scene_file_content, &err);
 
     if (!json) {
-        const char *indicator =
-            "                                                          ^";
-        fatal(temp_sprintf(
-            "load_scene: JSON parse error near: %.30s\n%s",
-            cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() - 15 : "unknown",
-            indicator));
+        fatal(
+            temp_sprintf("load_scene: JSON parse error: %s", format_json_error(&err)));
     }
 
     Camera camera = {.position = {0, 0, -5},
@@ -427,85 +443,73 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
                      .defocus_angle = 0,
                      .focus_dist = 1};
 
-    const cJSON *config = cJSON_GetObjectItemCaseSensitive(json, "config");
-    if (cJSON_IsObject(config)) {
-        int width = parse_int(cJSON_GetObjectItemCaseSensitive(config, "width"),
-                              "config.width", -1);
+    const Json *config = json_find(json, "config");
+    if (json_is_obj(config)) {
+        int width = parse_int(json_find(config, "width"), "config.width", -1);
         int height =
-            parse_int(cJSON_GetObjectItemCaseSensitive(config, "height"),
-                      "config.height", -1);
+            parse_int(json_find(config, "height"), "config.height", -1);
         if (width <= 0 || height <= 0) {
             fatal("config: invalid width/height");
         }
         state->width = (size_t)width;
         state->height = (size_t)height;
 
-        state->samples_per_pixel = parse_int(
-            cJSON_GetObjectItemCaseSensitive(config, "samples_per_pixel"),
-            "config.spp", state->samples_per_pixel);
-        state->max_depth =
-            parse_int(cJSON_GetObjectItemCaseSensitive(config, "max_depth"),
-                      "config.max_depth", state->max_depth);
+        state->samples_per_pixel =
+            parse_int(json_find(config, "samples_per_pixel"), "config.spp",
+                      state->samples_per_pixel);
+        state->max_depth = parse_int(json_find(config, "max_depth"),
+                                     "config.max_depth", state->max_depth);
     } else {
         fatal("config: not found.");
     }
 
-    const cJSON *cam = cJSON_GetObjectItemCaseSensitive(json, "camera");
-    if (cJSON_IsObject(cam)) {
-        camera.fov =
-            DEG2RAD(parse_float(cJSON_GetObjectItemCaseSensitive(cam, "fov"),
-                                "camera.fov", RAD2DEG(camera.fov)));
-        camera.defocus_angle = DEG2RAD(
-            parse_float(cJSON_GetObjectItemCaseSensitive(cam, "defocus_angle"),
-                        "camera.defocus_angle", 0));
-        camera.focus_dist =
-            parse_float(cJSON_GetObjectItemCaseSensitive(cam, "focus_dist"),
-                        "camera.focus_dist", camera.focus_dist);
+    const Json *cam = json_find(json, "camera");
+    if (json_is_obj(cam)) {
+        camera.fov = DEG2RAD(parse_float(json_find(cam, "fov"), "camera.fov",
+                                         RAD2DEG(camera.fov)));
+        camera.defocus_angle = DEG2RAD(parse_float(
+            json_find(cam, "defocus_angle"), "camera.defocus_angle", 0));
+        camera.focus_dist = parse_float(json_find(cam, "focus_dist"),
+                                        "camera.focus_dist", camera.focus_dist);
 
         // aspect ratio (fraction format)
-        const cJSON *ar = cJSON_GetObjectItemCaseSensitive(cam, "aspect_ratio");
-        if (cJSON_IsString(ar)) {
+        const Json *ar = json_find(cam, "aspect_ratio");
+        if (json_is_string(ar)) {
             int n, d;
-            if (sscanf(ar->valuestring, "%d/%d", &n, &d) == 2 && d != 0)
+            if (sscanf(json_cstring(ar), "%d/%d", &n, &d) == 2 && d != 0)
                 camera.aspect_ratio = (float)n / (float)d;
             else
                 log_warn(
                     "camera.aspect_ratio: invalid fraction, using default.");
         }
 
-        camera.position =
-            parse_v3f(cJSON_GetObjectItemCaseSensitive(cam, "position"),
-                      "camera.position", camera.position);
-        camera.look_at =
-            parse_v3f(cJSON_GetObjectItemCaseSensitive(cam, "look_at"),
-                      "camera.look_at", camera.look_at);
-        camera.up =
-            v3f_normalize(parse_v3f(cJSON_GetObjectItemCaseSensitive(cam, "up"),
-                                    "camera.up", camera.up));
+        camera.position = parse_v3f(json_find(cam, "position"),
+                                    "camera.position", camera.position);
+        camera.look_at = parse_v3f(json_find(cam, "look_at"), "camera.look_at",
+                                   camera.look_at);
+        camera.up = v3f_normalize(
+            parse_v3f(json_find(cam, "up"), "camera.up", camera.up));
     } else
         log_warn("camera: not found, using defaults.");
 
-    const cJSON *materials =
-        cJSON_GetObjectItemCaseSensitive(json, "materials");
-    if (cJSON_IsArray(materials)) {
-        int N = cJSON_GetArraySize(materials);
+    const Json *materials = json_find(json, "materials");
+    if (json_is_array(materials)) {
+        size_t N = json_array_size(materials);
         scene->materials = (Materials){0};
 
-        for (int i = 0; i < N; i++) {
-            const cJSON *mt = cJSON_GetArrayItem(materials, i);
-            const cJSON *type = cJSON_GetObjectItemCaseSensitive(mt, "type");
-            if (!cJSON_IsString(type)) {
+        for (size_t i = 0; i < N; i++) {
+            const Json_Value *mt = json_array_at(materials, i);
+            const Json *type = json_value_find(mt, "type");
+            if (!json_cstring(type)) {
                 log_warn("material: missing/invalid 'type', skipping.");
                 continue;
             }
 
             Material dst = {0};
-            dst.type = string_to_mat(type->valuestring);
+            dst.type = string_to_mat(json_cstring(type));
 
-            const cJSON *albedo =
-                cJSON_GetObjectItemCaseSensitive(mt, "albedo");
-            const cJSON *emission =
-                cJSON_GetObjectItemCaseSensitive(mt, "emission");
+            const Json *albedo = json_value_find(mt, "albedo");
+            const Json *emission = json_value_find(mt, "emission");
 
             switch (dst.type) {
                 case MAT_LAMBERTIAN:
@@ -520,9 +524,8 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
                         (Texture){.type = TEX_CONSTANT,
                                   .colour = parse_v3f(albedo, "material.albedo",
                                                       (V3f){1, 1, 1})};
-                    float f = parse_float(
-                        cJSON_GetObjectItemCaseSensitive(mt, "fuzz"),
-                        "material.fuzz", 0);
+                    float f = parse_float(json_value_find(mt, "fuzz"),
+                                          "material.fuzz", 0);
                     dst.properties.metal.fuzz = clamp_float(f, 0, 1);
                 } break;
 
@@ -535,14 +538,13 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
 
                 case MAT_DIELECTRIC:
                     dst.properties.dielectric.etai_eta =
-                        parse_float(cJSON_GetObjectItemCaseSensitive(
-                                        mt, "refraction_index"),
+                        parse_float(json_value_find(mt, "refraction_index"),
                                     "material.refraction_index", 1);
                     break;
 
                 default:
                     Log(Log_Error, "load_scene: material: unknown type %s",
-                        type->valuestring);
+                        json_cstring(type));
                     exit(1);
             }
 
@@ -550,25 +552,24 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
         }
     }
 
-    const cJSON *objects = cJSON_GetObjectItemCaseSensitive(json, "objects");
-    if (!cJSON_IsObject(objects)) {
+    const Json *objects = json_find(json, "objects");
+    if (!json_is_obj(objects)) {
         log_warn("objects: section missing/malformed.");
         goto END_PARSE;
     }
 
-    const cJSON *sitems = cJSON_GetObjectItemCaseSensitive(objects, "sphere");
-    if (cJSON_IsArray(sitems)) {
-        int N = cJSON_GetArraySize(sitems);
+    const Json *sitems = json_find(objects, "sphere");
+    if (json_is_array(sitems)) {
+        size_t N = json_array_size(sitems);
 
-        for (int i = 0; i < N; i++) {
-            const cJSON *s = cJSON_GetArrayItem(sitems, i);
-            int mi =
-                parse_mat_index(cJSON_GetObjectItemCaseSensitive(s, "material"),
-                                scene->materials.size, "sphere.material");
+        for (size_t i = 0; i < N; i++) {
+            const Json_Value *s = json_array_at(sitems, i);
+            int mi = parse_mat_index(json_value_find(s, "material"),
+                                     scene->materials.size, "sphere.material");
             if (mi < 0) continue;
 
-            const cJSON *center = cJSON_GetObjectItemCaseSensitive(s, "center");
-            const cJSON *radius = cJSON_GetObjectItemCaseSensitive(s, "radius");
+            const Json *center = json_value_find(s, "center");
+            const Json *radius = json_value_find(s, "radius");
 
             Sphere sphere = {0};
             sphere.mat_index = mi;
@@ -583,91 +584,82 @@ void load_scene(const char *scene_file_content, Scene *scene, State *state) {
         }
     }
 
-    const cJSON *pitems = cJSON_GetObjectItemCaseSensitive(objects, "plane");
-    if (cJSON_IsArray(pitems)) {
-        int N = cJSON_GetArraySize(pitems);
+    const Json *pitems = json_find(objects, "plane");
+    if (json_is_array(pitems)) {
+        size_t N = json_array_size(pitems);
 
-        for (int i = 0; i < N; i++) {
-            const cJSON *p = cJSON_GetArrayItem(pitems, i);
-            int mi =
-                parse_mat_index(cJSON_GetObjectItemCaseSensitive(p, "material"),
-                                scene->materials.size, "plane.material");
+        for (size_t i = 0; i < N; i++) {
+            const Json_Value *p = json_array_at(pitems, i);
+            int mi = parse_mat_index(json_value_find(p, "material"),
+                                     scene->materials.size, "plane.material");
             if (mi < 0) continue;
 
             Plane plane = {0};
             plane.mat_index = mi;
-            plane.normal = v3f_normalize(
-                parse_v3f(cJSON_GetObjectItemCaseSensitive(p, "normal"),
-                          "plane.normal", (V3f){0, 1, 0}));
-            plane.point =
-                parse_v3f(cJSON_GetObjectItemCaseSensitive(p, "point"),
-                          "plane.point", (V3f){0, 0, 0});
+            plane.normal = v3f_normalize(parse_v3f(
+                json_value_find(p, "normal"), "plane.normal", (V3f){0, 1, 0}));
+            plane.point = parse_v3f(json_value_find(p, "point"), "plane.point",
+                                    (V3f){0, 0, 0});
             plane.d = v3f_dot(plane.normal, plane.point);
 
             append_plane(scene, plane);
         }
     }
 
-    const cJSON *titems = cJSON_GetObjectItemCaseSensitive(objects, "triangle");
-    if (cJSON_IsArray(titems)) {
-        int N = cJSON_GetArraySize(titems);
-        for (int i = 0; i < N; i++) {
-            parse_triangle(scene, cJSON_GetArrayItem(titems, i));
+    const Json *titems = json_find(objects, "triangle");
+    if (json_is_array(titems)) {
+        size_t N = json_array_size(titems);
+        for (size_t i = 0; i < N; i++) {
+            parse_triangle(scene, json_array_at(titems, i));
         }
     }
 
-    const cJSON *qitems = cJSON_GetObjectItemCaseSensitive(objects, "quad");
-    if (cJSON_IsArray(qitems)) {
-        int N = cJSON_GetArraySize(qitems);
-        for (int i = 0; i < N; i++) {
-            parse_quad(scene, cJSON_GetArrayItem(qitems, i));
+    const Json *qitems = json_find(objects, "quad");
+    if (json_is_array(qitems)) {
+        size_t N = json_array_size(qitems);
+        for (size_t i = 0; i < N; i++) {
+            parse_quad(scene, json_array_at(qitems, i));
         }
     }
 
-    const cJSON *bitems = cJSON_GetObjectItemCaseSensitive(objects, "boxes");
-    if (cJSON_IsArray(bitems)) {
-        int N = cJSON_GetArraySize(bitems);
-        for (int i = 0; i < N; i++) {
-            const cJSON *b = cJSON_GetArrayItem(bitems, i);
+    const Json *bitems = json_find(objects, "boxes");
+    if (json_is_array(bitems)) {
+        size_t N = json_array_size(bitems);
+        for (size_t i = 0; i < N; i++) {
+            const Json_Value *b = json_array_at(bitems, i);
 
-            int mi =
-                parse_mat_index(cJSON_GetObjectItemCaseSensitive(b, "material"),
-                                scene->materials.size, "box.material");
+            int mi = parse_mat_index(json_value_find(b, "material"),
+                                     scene->materials.size, "box.material");
 
             if (mi < 0) continue;
 
-            V3f a = parse_v3f(cJSON_GetObjectItemCaseSensitive(b, "a"), "box.a",
-                              (V3f){0});
-            V3f c = parse_v3f(cJSON_GetObjectItemCaseSensitive(b, "b"), "box.b",
-                              (V3f){0});
+            V3f a = parse_v3f(json_value_find(b, "a"), "box.a", (V3f){0});
+            V3f c = parse_v3f(json_value_find(b, "b"), "box.b", (V3f){0});
 
             add_box(scene, a, c, mi);
         }
     }
 
-    const cJSON *mitems = cJSON_GetObjectItemCaseSensitive(objects, "models");
-    if (cJSON_IsArray(mitems)) {
-        int N = cJSON_GetArraySize(mitems);
-        for (int i = 0; i < N; i++) {
-            const cJSON *m = cJSON_GetArrayItem(mitems, i);
+    const Json *mitems = json_find(objects, "models");
+    if (json_is_array(mitems)) {
+        size_t N = json_array_size(mitems);
+        for (size_t i = 0; i < N; i++) {
+            const Json_Value *m = json_array_at(mitems, i);
 
-            const char *file_name = parse_string(
-                cJSON_GetObjectItemCaseSensitive(m, "file"), "model.file");
+            const char *file_name =
+                parse_string(json_value_find(m, "file"), "model.file");
 
-            V3f position =
-                parse_v3f(cJSON_GetObjectItemCaseSensitive(m, "position"),
-                          "model.position", (V3f){0});
+            V3f position = parse_v3f(json_value_find(m, "position"),
+                                     "model.position", (V3f){0});
 
-            float scale = parse_float(
-                cJSON_GetObjectItemCaseSensitive(m, "scale"), "model.scale", 1);
+            float scale =
+                parse_float(json_value_find(m, "scale"), "model.scale", 1);
 
             add_model(scene, position, scale, file_name, &scene->materials);
         }
     }
 
 END_PARSE:
-    cJSON_Delete(json);
-
     scene->bvh_root = construct_bvh(&scene->arena, scene->objects.items, 0,
                                     scene->objects.size);
 

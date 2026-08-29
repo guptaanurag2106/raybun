@@ -1,5 +1,6 @@
 #pragma once
 
+#include "json.h"
 #include "vec.h"
 
 typedef V3f Colour;
@@ -151,3 +152,9 @@ typedef struct {
     TileStatus status;
     int assigned_worker_idx;  // -1 = master, >=0 = index into workers vector
 } TileAssignment;
+
+static char *format_json_error(const Json_Error *err) {
+    if (err == NULL) return NULL;
+    return temp_sprintf("%s:%d:%d: %s", err->source, err->line, err->column,
+                        err->message);
+}

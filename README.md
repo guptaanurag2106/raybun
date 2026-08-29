@@ -2,7 +2,7 @@
 
 Raybun is a simple, distributed C-based raytracer. It renders 3D scenes defined in JSON files and supports distributed rendering across multiple machines (Master-Worker style).
 
-![Demo Render](./data/simple_scene.png)
+![Demo Render](./data/cornell.png)
 
 ## How it works
 
